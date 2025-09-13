@@ -471,6 +471,368 @@ const Clients = () => {
   );
 };
 
+// Optimisation Fiscale SASU
+const OptimisationFiscale = () => {
+  const [simulation, setSimulation] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [baremes, setBaremes] = useState(null);
+  const [formData, setFormData] = useState({
+    ca_previsionnel: 150000,
+    charges_deductibles: 30000,
+    situation_familiale: "celibataire",
+    nombre_parts: 1.0,
+    autres_revenus: 0,
+    patrimoine_existant: 0
+  });
+
+  useEffect(() => {
+    fetchBaremes();
+  }, []);
+
+  const fetchBaremes = async () => {
+    try {
+      const response = await axios.get(`${API}/baremes-fiscaux-2025`);
+      setBaremes(response.data);
+    } catch (error) {
+      toast.error("Erreur lors du chargement des barèmes");
+    }
+  };
+
+  const runSimulation = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API}/optimisation-fiscale`, formData);
+      setSimulation(response.data);
+      toast.success("Simulation calculée avec succès");
+    } catch (error) {
+      toast.error("Erreur lors du calcul de la simulation");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatEuros = (amount) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const formatPercent = (rate) => {
+    return `${rate.toFixed(1)}%`;
+  };
+
+  // Données pour les graphiques
+  const chartData = simulation ? [
+    {
+      name: 'Scénario Optimal',
+      remuneration: simulation.scenario_optimal.remuneration_brute,
+      dividendes: simulation.scenario_optimal.dividendes_bruts,
+      netDisponible: simulation.scenario_optimal.net_disponible,
+      tauxImposition: simulation.scenario_optimal.taux_global_imposition
+    },
+    {
+      name: 'Max Rémunération',
+      remuneration: simulation.scenario_remuneration_max.remuneration_brute,
+      dividendes: simulation.scenario_remuneration_max.dividendes_bruts,
+      netDisponible: simulation.scenario_remuneration_max.net_disponible,
+      tauxImposition: simulation.scenario_remuneration_max.taux_global_imposition
+    },
+    {
+      name: 'Max Dividendes',
+      remuneration: simulation.scenario_dividendes_max.remuneration_brute,
+      dividendes: simulation.scenario_dividendes_max.dividendes_bruts,
+      netDisponible: simulation.scenario_dividendes_max.net_disponible,
+      tauxImposition: simulation.scenario_dividendes_max.taux_global_imposition
+    }
+  ] : [];
+
+  const pieData = simulation ? [
+    { name: 'Net disponible', value: simulation.scenario_optimal.net_disponible, color: '#10b981' },
+    { name: 'IS', value: simulation.scenario_optimal.is_a_payer, color: '#f59e0b' },
+    { name: 'Cotisations sociales', value: simulation.scenario_optimal.cotisations_sociales, color: '#ef4444' },
+    { name: 'IR', value: simulation.scenario_optimal.ir_sur_remuneration + simulation.scenario_optimal.ir_sur_dividendes, color: '#8b5cf6' }
+  ] : [];
+
+  return (
+    <div className="p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Optimisation Fiscale SASU</h1>
+        <p className="text-gray-600">Calculez la répartition optimale rémunération/dividendes avec les barèmes 2025</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Formulaire de simulation */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calculator className="w-5 h-5 mr-2" />
+                Paramètres de simulation
+              </CardTitle>
+              <CardDescription>
+                Saisissez vos données prévisionnelles
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="ca">Chiffre d'affaires prévisionnel</Label>
+                <Input
+                  id="ca"
+                  type="number"
+                  value={formData.ca_previsionnel}
+                  onChange={(e) => setFormData({...formData, ca_previsionnel: parseFloat(e.target.value) || 0})}
+                  placeholder="150000"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="charges">Charges déductibles</Label>
+                <Input
+                  id="charges"
+                  type="number"
+                  value={formData.charges_deductibles}
+                  onChange={(e) => setFormData({...formData, charges_deductibles: parseFloat(e.target.value) || 0})}
+                  placeholder="30000"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="situation">Situation familiale</Label>
+                <Select 
+                  value={formData.situation_familiale} 
+                  onValueChange={(value) => setFormData({...formData, situation_familiale: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="celibataire">Célibataire</SelectItem>
+                    <SelectItem value="marie">Marié(e)</SelectItem>
+                    <SelectItem value="pacs">Pacsé(e)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="parts">Nombre de parts fiscales</Label>
+                <Input
+                  id="parts"
+                  type="number"
+                  step="0.5"
+                  value={formData.nombre_parts}
+                  onChange={(e) => setFormData({...formData, nombre_parts: parseFloat(e.target.value) || 1})}
+                  placeholder="1.0"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="autres">Autres revenus annuels</Label>
+                <Input
+                  id="autres"
+                  type="number"
+                  value={formData.autres_revenus}
+                  onChange={(e) => setFormData({...formData, autres_revenus: parseFloat(e.target.value) || 0})}
+                  placeholder="0"
+                />
+              </div>
+
+              <Button 
+                onClick={runSimulation} 
+                disabled={loading}
+                className="w-full"
+              >
+                {loading ? "Calcul en cours..." : "Calculer l'optimisation"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Barèmes fiscaux */}
+          {baremes && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-sm">Barèmes 2025</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-2">
+                <div>
+                  <strong>IS :</strong> 15% (≤42,5k€), 25% (>42,5k€)
+                </div>
+                <div>
+                  <strong>Dividendes :</strong> Flat tax 30%
+                </div>
+                <div>
+                  <strong>Cotisations dirigeant :</strong> ≈45%
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Résultats */}
+        <div className="lg:col-span-2">
+          {simulation ? (
+            <div className="space-y-6">
+              {/* Scénario optimal */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-green-700">🎯 Scénario Optimal</CardTitle>
+                  <CardDescription>
+                    Répartition recommandée pour maximiser votre net disponible
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {formatEuros(simulation.scenario_optimal.remuneration_brute)}
+                      </div>
+                      <div className="text-sm text-gray-600">Rémunération brute</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {formatEuros(simulation.scenario_optimal.dividendes_bruts)}
+                      </div>
+                      <div className="text-sm text-gray-600">Dividendes bruts</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {formatEuros(simulation.scenario_optimal.net_disponible)}
+                      </div>
+                      <div className="text-sm text-gray-600">Net disponible</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {formatPercent(simulation.scenario_optimal.taux_global_imposition)}
+                      </div>
+                      <div className="text-sm text-gray-600">Taux global</div>
+                    </div>
+                  </div>
+
+                  {/* Répartition fiscale - Graphique en secteurs */}
+                  <div className="mb-6">
+                    <h4 className="text-lg font-semibold mb-4">Répartition fiscale</h4>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={pieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={100}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {pieData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => formatEuros(value)} />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Comparaison des scénarios */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <BarChart3 className="w-5 h-5 mr-2" />
+                    Comparaison des scénarios
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80 mb-6">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis tickFormatter={(value) => `${value/1000}k€`} />
+                        <Tooltip formatter={(value) => formatEuros(value)} />
+                        <Bar dataKey="netDisponible" name="Net disponible" fill="#10b981" />
+                        <Bar dataKey="remuneration" name="Rémunération" fill="#3b82f6" />
+                        <Bar dataKey="dividendes" name="Dividendes" fill="#f59e0b" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Tableau comparatif */}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Scénario</TableHead>
+                        <TableHead>Rémunération</TableHead>
+                        <TableHead>Dividendes</TableHead>
+                        <TableHead>Net disponible</TableHead>
+                        <TableHead>Taux global</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow className="bg-green-50">
+                        <TableCell className="font-medium text-green-700">🎯 Optimal</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_optimal.remuneration_brute)}</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_optimal.dividendes_bruts)}</TableCell>
+                        <TableCell className="font-bold">{formatEuros(simulation.scenario_optimal.net_disponible)}</TableCell>
+                        <TableCell>{formatPercent(simulation.scenario_optimal.taux_global_imposition)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">💼 Max Rémunération</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_remuneration_max.remuneration_brute)}</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_remuneration_max.dividendes_bruts)}</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_remuneration_max.net_disponible)}</TableCell>
+                        <TableCell>{formatPercent(simulation.scenario_remuneration_max.taux_global_imposition)}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">💰 Max Dividendes</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_dividendes_max.remuneration_brute)}</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_dividendes_max.dividendes_bruts)}</TableCell>
+                        <TableCell>{formatEuros(simulation.scenario_dividendes_max.net_disponible)}</TableCell>
+                        <TableCell>{formatPercent(simulation.scenario_dividendes_max.taux_global_imposition)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              {/* Recommandations */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-blue-700">💡 Recommandations personnalisées</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {simulation.recommandations.map((rec, index) => (
+                      <div key={index} className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                        {rec}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="text-center py-12">
+                <Calculator className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  Aucune simulation disponible
+                </h3>
+                <p className="text-gray-600">
+                  Saisissez vos paramètres et lancez une simulation pour voir les résultats d'optimisation fiscale.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Composant principal
 function App() {
   return (
@@ -486,6 +848,7 @@ function App() {
               <Route path="/affaires" element={<div className="p-8">Affaires - En développement</div>} />
               <Route path="/actions" element={<div className="p-8">Actions - En développement</div>} />
               <Route path="/devis" element={<div className="p-8">Devis - En développement</div>} />
+              <Route path="/optimisation-fiscale" element={<OptimisationFiscale />} />
             </Routes>
           </div>
         </div>
