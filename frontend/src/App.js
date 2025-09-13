@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import axios from "axios";
-import { Plus, Users, Target, Calendar, FileText, TrendingUp, Phone, Mail, Building, User, Calculator, PieChart, BarChart3 } from "lucide-react";
+import { Plus, Users, Target, Calendar, FileText, TrendingUp, Phone, Mail, Building, User, Calculator, PieChart, BarChart3, Search, Filter, Edit, Trash2, Eye, Euro, Clock, AlertCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, LineChart, Line, Pie } from "recharts";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./components/ui/alert-dialog";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -63,6 +64,43 @@ const Navigation = () => {
         })}
       </ul>
     </nav>
+  );
+};
+
+// Composant de recherche et filtres
+const SearchAndFilter = ({ searchTerm, setSearchTerm, filters, setFilters, filterOptions }) => {
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="relative flex-1">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder="Rechercher..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+      
+      {filterOptions.map((filter) => (
+        <Select
+          key={filter.key}
+          value={filters[filter.key] || "all"}
+          onValueChange={(value) => setFilters(prev => ({...prev, [filter.key]: value === "all" ? "" : value}))}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder={filter.placeholder} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous</SelectItem>
+            {filter.options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ))}
+    </div>
   );
 };
 
@@ -149,6 +187,9 @@ const Prospects = () => {
   const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingProspect, setEditingProspect] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({});
   const [formData, setFormData] = useState({
     nom: "",
     prenom: "",
@@ -177,21 +218,55 @@ const Prospects = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/prospects`, formData);
-      toast.success("Prospect créé avec succès");
+      if (editingProspect) {
+        await axios.put(`${API}/prospects/${editingProspect.id}`, formData);
+        toast.success("Prospect modifié avec succès");
+      } else {
+        await axios.post(`${API}/prospects`, formData);
+        toast.success("Prospect créé avec succès");
+      }
       setShowForm(false);
-      setFormData({
-        nom: "",
-        prenom: "",
-        email: "",
-        telephone: "",
-        entreprise: "",
-        poste: "",
-        notes: ""
-      });
+      setEditingProspect(null);
+      resetForm();
       fetchProspects();
     } catch (error) {
-      toast.error("Erreur lors de la création du prospect");
+      toast.error("Erreur lors de l'opération");
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      nom: "",
+      prenom: "",
+      email: "",
+      telephone: "",
+      entreprise: "",
+      poste: "",
+      notes: ""
+    });
+  };
+
+  const editProspect = (prospect) => {
+    setEditingProspect(prospect);
+    setFormData({
+      nom: prospect.nom,
+      prenom: prospect.prenom,
+      email: prospect.email,
+      telephone: prospect.telephone,
+      entreprise: prospect.entreprise,
+      poste: prospect.poste || "",
+      notes: prospect.notes || ""
+    });
+    setShowForm(true);
+  };
+
+  const deleteProspect = async (prospectId) => {
+    try {
+      await axios.delete(`${API}/prospects/${prospectId}`);
+      toast.success("Prospect supprimé");
+      fetchProspects();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
     }
   };
 
@@ -216,6 +291,33 @@ const Prospects = () => {
     return colors[statut] || "bg-gray-100 text-gray-800";
   };
 
+  // Filtrage et recherche
+  const filteredProspects = prospects.filter(prospect => {
+    const matchesSearch = !searchTerm || 
+      prospect.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      prospect.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      prospect.entreprise.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      prospect.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = !filters.statut || prospect.statut === filters.statut;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const filterOptions = [
+    {
+      key: "statut",
+      placeholder: "Filtrer par statut",
+      options: [
+        { value: "nouveau", label: "Nouveau" },
+        { value: "qualifie", label: "Qualifié" },
+        { value: "interesse", label: "Intéressé" },
+        { value: "non_interesse", label: "Non intéressé" },
+        { value: "converti", label: "Converti" }
+      ]
+    }
+  ];
+
   if (loading) return <div className="p-8">Chargement...</div>;
 
   return (
@@ -225,7 +327,13 @@ const Prospects = () => {
           <h1 className="text-3xl font-bold text-gray-900">Prospects</h1>
           <p className="text-gray-600">Gérez vos prospects et convertissez-les en clients</p>
         </div>
-        <Dialog open={showForm} onOpenChange={setShowForm}>
+        <Dialog open={showForm} onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) {
+            setEditingProspect(null);
+            resetForm();
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="w-4 h-4 mr-2" />
@@ -234,9 +342,11 @@ const Prospects = () => {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[525px]">
             <DialogHeader>
-              <DialogTitle>Créer un nouveau prospect</DialogTitle>
+              <DialogTitle>
+                {editingProspect ? "Modifier le prospect" : "Créer un nouveau prospect"}
+              </DialogTitle>
               <DialogDescription>
-                Ajoutez les informations du prospect pour le suivi commercial.
+                {editingProspect ? "Modifiez les informations du prospect." : "Ajoutez les informations du prospect pour le suivi commercial."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -306,21 +416,35 @@ const Prospects = () => {
                 />
               </div>
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowForm(false);
+                  setEditingProspect(null);
+                  resetForm();
+                }}>
                   Annuler
                 </Button>
-                <Button type="submit">Créer le prospect</Button>
+                <Button type="submit">
+                  {editingProspect ? "Modifier" : "Créer"} le prospect
+                </Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
+      <SearchAndFilter
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filters={filters}
+        setFilters={setFilters}
+        filterOptions={filterOptions}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Liste des prospects</CardTitle>
           <CardDescription>
-            {prospects.length} prospect{prospects.length > 1 ? 's' : ''} enregistré{prospects.length > 1 ? 's' : ''}
+            {filteredProspects.length} prospect{filteredProspects.length > 1 ? 's' : ''} {searchTerm || Object.keys(filters).length > 0 ? 'trouvé(s)' : 'enregistré(s)'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -335,7 +459,7 @@ const Prospects = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {prospects.map((prospect) => (
+              {filteredProspects.map((prospect) => (
                 <TableRow key={prospect.id}>
                   <TableCell>
                     <div>
@@ -365,15 +489,45 @@ const Prospects = () => {
                     {new Date(prospect.date_creation).toLocaleDateString('fr-FR')}
                   </TableCell>
                   <TableCell>
-                    {prospect.statut !== 'converti' && (
+                    <div className="flex items-center space-x-2">
                       <Button
                         size="sm"
-                        onClick={() => convertToClient(prospect.id)}
-                        className="mr-2"
+                        variant="outline"
+                        onClick={() => editProspect(prospect)}
                       >
-                        Convertir
+                        <Edit className="w-3 h-3" />
                       </Button>
-                    )}
+                      {prospect.statut !== 'converti' && (
+                        <Button
+                          size="sm"
+                          onClick={() => convertToClient(prospect.id)}
+                          className="mr-2"
+                        >
+                          Convertir
+                        </Button>
+                      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer ce prospect ? Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteProspect(prospect.id)}>
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -385,10 +539,12 @@ const Prospects = () => {
   );
 };
 
-// Clients (similaire à Prospects mais pour les clients)
+// Clients
 const Clients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({});
 
   useEffect(() => {
     fetchClients();
@@ -405,6 +561,17 @@ const Clients = () => {
     }
   };
 
+  // Filtrage et recherche
+  const filteredClients = clients.filter(client => {
+    const matchesSearch = !searchTerm || 
+      client.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.entreprise.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesSearch;
+  });
+
   if (loading) return <div className="p-8">Chargement...</div>;
 
   return (
@@ -416,11 +583,19 @@ const Clients = () => {
         </div>
       </div>
 
+      <SearchAndFilter
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filters={filters}
+        setFilters={setFilters}
+        filterOptions={[]}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Liste des clients</CardTitle>
           <CardDescription>
-            {clients.length} client{clients.length > 1 ? 's' : ''} actif{clients.length > 1 ? 's' : ''}
+            {filteredClients.length} client{filteredClients.length > 1 ? 's' : ''} {searchTerm ? 'trouvé(s)' : 'actif(s)'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -431,10 +606,11 @@ const Clients = () => {
                 <TableHead>Entreprise</TableHead>
                 <TableHead>CA Total</TableHead>
                 <TableHead>Date conversion</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clients.map((client) => (
+              {filteredClients.map((client) => (
                 <TableRow key={client.id}>
                   <TableCell>
                     <div>
@@ -456,10 +632,21 @@ const Clients = () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {client.chiffre_affaire_total.toLocaleString()} €
+                    <div className="flex items-center">
+                      <Euro className="w-4 h-4 mr-1 text-green-600" />
+                      {client.chiffre_affaire_total.toLocaleString()} €
+                    </div>
                   </TableCell>
                   <TableCell>
                     {new Date(client.date_creation).toLocaleDateString('fr-FR')}
+                  </TableCell>
+                  <TableCell>
+                    <Link to={`/affaires?client=${client.id}`}>
+                      <Button size="sm" variant="outline">
+                        <Eye className="w-3 h-3 mr-2" />
+                        Voir affaires
+                      </Button>
+                    </Link>
                   </TableCell>
                 </TableRow>
               ))}
@@ -471,7 +658,1341 @@ const Clients = () => {
   );
 };
 
-// Optimisation Fiscale SASU
+// Affaires
+const Affaires = () => {
+  const [affaires, setAffaires] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingAffaire, setEditingAffaire] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({});
+  const [formData, setFormData] = useState({
+    client_id: "",
+    titre: "",
+    description: "",
+    montant_previsionnel: 0,
+    probabilite: 50,
+    date_cloture_prevue: ""
+  });
+
+  useEffect(() => {
+    fetchAffaires();
+    fetchClients();
+  }, []);
+
+  const fetchAffaires = async () => {
+    try {
+      const response = await axios.get(`${API}/affaires`);
+      setAffaires(response.data);
+    } catch (error) {
+      toast.error("Erreur lors du chargement des affaires");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const response = await axios.get(`${API}/clients`);
+      setClients(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des clients");
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = {
+        ...formData,
+        montant_previsionnel: parseFloat(formData.montant_previsionnel),
+        probabilite: parseInt(formData.probabilite),
+        date_cloture_prevue: formData.date_cloture_prevue ? new Date(formData.date_cloture_prevue).toISOString() : null
+      };
+
+      if (editingAffaire) {
+        await axios.put(`${API}/affaires/${editingAffaire.id}`, data);
+        toast.success("Affaire modifiée avec succès");
+      } else {
+        await axios.post(`${API}/affaires`, data);
+        toast.success("Affaire créée avec succès");
+      }
+      setShowForm(false);
+      setEditingAffaire(null);
+      resetForm();
+      fetchAffaires();
+    } catch (error) {
+      toast.error("Erreur lors de l'opération");
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      client_id: "",
+      titre: "",
+      description: "",
+      montant_previsionnel: 0,
+      probabilite: 50,
+      date_cloture_prevue: ""
+    });
+  };
+
+  const editAffaire = (affaire) => {
+    setEditingAffaire(affaire);
+    setFormData({
+      client_id: affaire.client_id,
+      titre: affaire.titre,
+      description: affaire.description || "",
+      montant_previsionnel: affaire.montant_previsionnel,
+      probabilite: affaire.probabilite,
+      date_cloture_prevue: affaire.date_cloture_prevue ? new Date(affaire.date_cloture_prevue).toISOString().split('T')[0] : ""
+    });
+    setShowForm(true);
+  };
+
+  const deleteAffaire = async (affaireId) => {
+    try {
+      await axios.delete(`${API}/affaires/${affaireId}`);
+      toast.success("Affaire supprimée");
+      fetchAffaires();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const getStatutBadge = (statut) => {
+    const colors = {
+      prospect: "bg-blue-100 text-blue-800",
+      negociation: "bg-yellow-100 text-yellow-800",
+      proposition: "bg-orange-100 text-orange-800",
+      gagne: "bg-green-100 text-green-800",
+      perdu: "bg-red-100 text-red-800"
+    };
+    return colors[statut] || "bg-gray-100 text-gray-800";
+  };
+
+  const getClientName = (clientId) => {
+    const client = clients.find(c => c.id === clientId);
+    return client ? `${client.prenom} ${client.nom} (${client.entreprise})` : "Client inconnu";
+  };
+
+  // Filtrage et recherche
+  const filteredAffaires = affaires.filter(affaire => {
+    const clientName = getClientName(affaire.client_id);
+    const matchesSearch = !searchTerm || 
+      affaire.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      clientName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = !filters.statut || affaire.statut === filters.statut;
+    const matchesClient = !filters.client_id || affaire.client_id === filters.client_id;
+    
+    return matchesSearch && matchesStatus && matchesClient;
+  });
+
+  const filterOptions = [
+    {
+      key: "statut",
+      placeholder: "Filtrer par statut",
+      options: [
+        { value: "prospect", label: "Prospect" },
+        { value: "negociation", label: "Négociation" },
+        { value: "proposition", label: "Proposition" },
+        { value: "gagne", label: "Gagné" },
+        { value: "perdu", label: "Perdu" }
+      ]
+    },
+    {
+      key: "client_id",
+      placeholder: "Filtrer par client",
+      options: clients.map(client => ({
+        value: client.id,
+        label: `${client.prenom} ${client.nom} (${client.entreprise})`
+      }))
+    }
+  ];
+
+  if (loading) return <div className="p-8">Chargement...</div>;
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Affaires</h1>
+          <p className="text-gray-600">Gérez vos opportunités commerciales</p>
+        </div>
+        <Dialog open={showForm} onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) {
+            setEditingAffaire(null);
+            resetForm();
+          }
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouvelle affaire
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingAffaire ? "Modifier l'affaire" : "Créer une nouvelle affaire"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingAffaire ? "Modifiez les informations de l'affaire." : "Ajoutez une nouvelle opportunité commerciale."}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="client_id">Client *</Label>
+                <Select
+                  value={formData.client_id}
+                  onValueChange={(value) => setFormData({...formData, client_id: value})}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.prenom} {client.nom} ({client.entreprise})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="titre">Titre *</Label>
+                <Input
+                  id="titre"
+                  value={formData.titre}
+                  onChange={(e) => setFormData({...formData, titre: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="montant">Montant prévisionnel (€) *</Label>
+                  <Input
+                    id="montant"
+                    type="number"
+                    value={formData.montant_previsionnel}
+                    onChange={(e) => setFormData({...formData, montant_previsionnel: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="probabilite">Probabilité (%)</Label>
+                  <Input
+                    id="probabilite"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.probabilite}
+                    onChange={(e) => setFormData({...formData, probabilite: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="date_cloture">Date de clôture prévue</Label>
+                <Input
+                  id="date_cloture"
+                  type="date"
+                  value={formData.date_cloture_prevue}
+                  onChange={(e) => setFormData({...formData, date_cloture_prevue: e.target.value})}
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowForm(false);
+                  setEditingAffaire(null);
+                  resetForm();
+                }}>
+                  Annuler
+                </Button>
+                <Button type="submit">
+                  {editingAffaire ? "Modifier" : "Créer"} l'affaire
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <SearchAndFilter
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filters={filters}
+        setFilters={setFilters}
+        filterOptions={filterOptions}
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Liste des affaires</CardTitle>
+          <CardDescription>
+            {filteredAffaires.length} affaire{filteredAffaires.length > 1 ? 's' : ''} {searchTerm || Object.keys(filters).length > 0 ? 'trouvée(s)' : 'enregistrée(s)'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Titre</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Montant</TableHead>
+                <TableHead>Probabilité</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Date clôture</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAffaires.map((affaire) => (
+                <TableRow key={affaire.id}>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{affaire.titre}</div>
+                      {affaire.description && (
+                        <div className="text-sm text-gray-500 truncate max-w-xs">
+                          {affaire.description}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">{getClientName(affaire.client_id)}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center font-medium">
+                      <Euro className="w-4 h-4 mr-1 text-green-600" />
+                      {affaire.montant_previsionnel.toLocaleString()} €
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
+                      <div className="w-12 bg-gray-200 rounded-full h-2 mr-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full" 
+                          style={{width: `${affaire.probabilite}%`}}
+                        ></div>
+                      </div>
+                      {affaire.probabilite}%
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getStatutBadge(affaire.statut)}>
+                      {affaire.statut}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {affaire.date_cloture_prevue ? (
+                      <div className="flex items-center">
+                        <Clock className="w-3 h-3 mr-1" />
+                        {new Date(affaire.date_cloture_prevue).toLocaleDateString('fr-FR')}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">Non définie</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => editAffaire(affaire)}
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <Link to={`/actions?affaire=${affaire.id}`}>
+                        <Button size="sm" variant="outline">
+                          <Calendar className="w-3 h-3" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer cette affaire ? Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteAffaire(affaire.id)}>
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Actions
+const Actions = () => {
+  const [actions, setActions] = useState([]);
+  const [affaires, setAffaires] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingAction, setEditingAction] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({});
+  const [formData, setFormData] = useState({
+    affaire_id: "",
+    type_action: "appel",
+    titre: "",
+    description: "",
+    date_prevue: ""
+  });
+
+  useEffect(() => {
+    fetchActions();
+    fetchAffaires();
+    fetchClients();
+  }, []);
+
+  const fetchActions = async () => {
+    try {
+      const response = await axios.get(`${API}/actions`);
+      setActions(response.data);
+    } catch (error) {
+      toast.error("Erreur lors du chargement des actions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAffaires = async () => {
+    try {
+      const response = await axios.get(`${API}/affaires`);
+      setAffaires(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des affaires");
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const response = await axios.get(`${API}/clients`);
+      setClients(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des clients");
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = {
+        ...formData,
+        date_prevue: new Date(formData.date_prevue).toISOString()
+      };
+
+      if (editingAction) {
+        await axios.put(`${API}/actions/${editingAction.id}`, data);
+        toast.success("Action modifiée avec succès");
+      } else {
+        await axios.post(`${API}/actions`, data);
+        toast.success("Action créée avec succès");
+      }
+      setShowForm(false);
+      setEditingAction(null);
+      resetForm();
+      fetchActions();
+    } catch (error) {
+      toast.error("Erreur lors de l'opération");
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      affaire_id: "",
+      type_action: "appel",
+      titre: "",
+      description: "",
+      date_prevue: ""
+    });
+  };
+
+  const editAction = (action) => {
+    setEditingAction(action);
+    setFormData({
+      affaire_id: action.affaire_id,
+      type_action: action.type_action,
+      titre: action.titre,
+      description: action.description || "",
+      date_prevue: new Date(action.date_prevue).toISOString().split('T')[0]
+    });
+    setShowForm(true);
+  };
+
+  const deleteAction = async (actionId) => {
+    try {
+      await axios.delete(`${API}/actions/${actionId}`);
+      toast.success("Action supprimée");
+      fetchActions();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const getStatutBadge = (statut) => {
+    const colors = {
+      a_faire: "bg-blue-100 text-blue-800",
+      en_cours: "bg-yellow-100 text-yellow-800",
+      termine: "bg-green-100 text-green-800",
+      annule: "bg-red-100 text-red-800"
+    };
+    return colors[statut] || "bg-gray-100 text-gray-800";
+  };
+
+  const getTypeIcon = (type) => {
+    const icons = {
+      appel: Phone,
+      email: Mail,
+      rendez_vous: Calendar,
+      relance: AlertCircle,
+      autre: Target
+    };
+    return icons[type] || Target;
+  };
+
+  const getAffaireName = (affaireId) => {
+    const affaire = affaires.find(a => a.id === affaireId);
+    if (!affaire) return "Affaire inconnue";
+    
+    const client = clients.find(c => c.id === affaire.client_id);
+    return `${affaire.titre} (${client ? client.entreprise : 'Client inconnu'})`;
+  };
+
+  // Filtrage et recherche
+  const filteredActions = actions.filter(action => {
+    const affaireName = getAffaireName(action.affaire_id);
+    const matchesSearch = !searchTerm || 
+      action.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      affaireName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = !filters.statut || action.statut === filters.statut;
+    const matchesType = !filters.type_action || action.type_action === filters.type_action;
+    const matchesAffaire = !filters.affaire_id || action.affaire_id === filters.affaire_id;
+    
+    return matchesSearch && matchesStatus && matchesType && matchesAffaire;
+  });
+
+  const filterOptions = [
+    {
+      key: "statut",
+      placeholder: "Filtrer par statut",
+      options: [
+        { value: "a_faire", label: "À faire" },
+        { value: "en_cours", label: "En cours" },
+        { value: "termine", label: "Terminé" },
+        { value: "annule", label: "Annulé" }
+      ]
+    },
+    {
+      key: "type_action",
+      placeholder: "Filtrer par type",
+      options: [
+        { value: "appel", label: "Appel" },
+        { value: "email", label: "Email" },
+        { value: "rendez_vous", label: "Rendez-vous" },
+        { value: "relance", label: "Relance" },
+        { value: "autre", label: "Autre" }
+      ]
+    },
+    {
+      key: "affaire_id",
+      placeholder: "Filtrer par affaire",
+      options: affaires.map(affaire => ({
+        value: affaire.id,
+        label: affaire.titre
+      }))
+    }
+  ];
+
+  if (loading) return <div className="p-8">Chargement...</div>;
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Actions</h1>
+          <p className="text-gray-600">Planifiez et suivez vos actions commerciales</p>
+        </div>
+        <Dialog open={showForm} onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) {
+            setEditingAction(null);
+            resetForm();
+          }
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouvelle action
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingAction ? "Modifier l'action" : "Créer une nouvelle action"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingAction ? "Modifiez les informations de l'action." : "Planifiez une nouvelle action commerciale."}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="affaire_id">Affaire *</Label>
+                <Select
+                  value={formData.affaire_id}
+                  onValueChange={(value) => setFormData({...formData, affaire_id: value})}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner une affaire" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {affaires.map((affaire) => (
+                      <SelectItem key={affaire.id} value={affaire.id}>
+                        {getAffaireName(affaire.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="type_action">Type d'action *</Label>
+                <Select
+                  value={formData.type_action}
+                  onValueChange={(value) => setFormData({...formData, type_action: value})}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="appel">Appel</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="rendez_vous">Rendez-vous</SelectItem>
+                    <SelectItem value="relance">Relance</SelectItem>
+                    <SelectItem value="autre">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="titre">Titre *</Label>
+                <Input
+                  id="titre"
+                  value={formData.titre}
+                  onChange={(e) => setFormData({...formData, titre: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label htmlFor="date_prevue">Date prévue *</Label>
+                <Input
+                  id="date_prevue"
+                  type="date"
+                  value={formData.date_prevue}
+                  onChange={(e) => setFormData({...formData, date_prevue: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowForm(false);
+                  setEditingAction(null);
+                  resetForm();
+                }}>
+                  Annuler
+                </Button>
+                <Button type="submit">
+                  {editingAction ? "Modifier" : "Créer"} l'action
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <SearchAndFilter
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filters={filters}
+        setFilters={setFilters}
+        filterOptions={filterOptions}
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Liste des actions</CardTitle>
+          <CardDescription>
+            {filteredActions.length} action{filteredActions.length > 1 ? 's' : ''} {searchTerm || Object.keys(filters).length > 0 ? 'trouvée(s)' : 'planifiée(s)'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Action</TableHead>
+                <TableHead>Affaire</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Date prévue</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredActions.map((action) => {
+                const TypeIcon = getTypeIcon(action.type_action);
+                return (
+                  <TableRow key={action.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{action.titre}</div>
+                        {action.description && (
+                          <div className="text-sm text-gray-500 truncate max-w-xs">
+                            {action.description}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{getAffaireName(action.affaire_id)}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <TypeIcon className="w-4 h-4 mr-2" />
+                        {action.type_action}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <Clock className="w-3 h-3 mr-1" />
+                        {new Date(action.date_prevue).toLocaleDateString('fr-FR')}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatutBadge(action.statut)}>
+                        {action.statut.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => editAction(action)}
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="destructive">
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Êtes-vous sûr de vouloir supprimer cette action ? Cette action est irréversible.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteAction(action.id)}>
+                                Supprimer
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Devis
+const Devis = () => {
+  const [devisList, setDevisList] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [affaires, setAffaires] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingDevis, setEditingDevis] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({});
+  const [formData, setFormData] = useState({
+    client_id: "",
+    affaire_id: "",
+    titre: "",
+    lignes: [],
+    taux_tva: 20.0,
+    date_validite: ""
+  });
+  const [currentLigne, setCurrentLigne] = useState({
+    description: "",
+    quantite: 1,
+    prix_unitaire: 0,
+    montant: 0
+  });
+
+  useEffect(() => {
+    fetchDevis();
+    fetchClients();
+    fetchAffaires();
+  }, []);
+
+  const fetchDevis = async () => {
+    try {
+      const response = await axios.get(`${API}/devis`);
+      setDevisList(response.data);
+    } catch (error) {
+      toast.error("Erreur lors du chargement des devis");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const response = await axios.get(`${API}/clients`);
+      setClients(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des clients");
+    }
+  };
+
+  const fetchAffaires = async () => {
+    try {
+      const response = await axios.get(`${API}/affaires`);
+      setAffaires(response.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des affaires");
+    }
+  };
+
+  const calculateMontantLigne = () => {
+    const montant = parseFloat(currentLigne.quantite) * parseFloat(currentLigne.prix_unitaire);
+    setCurrentLigne(prev => ({...prev, montant}));
+  };
+
+  useEffect(() => {
+    calculateMontantLigne();
+  }, [currentLigne.quantite, currentLigne.prix_unitaire]);
+
+  const addLigne = () => {
+    if (currentLigne.description && currentLigne.quantite > 0 && currentLigne.prix_unitaire >= 0) {
+      setFormData(prev => ({
+        ...prev,
+        lignes: [...prev.lignes, {...currentLigne}]
+      }));
+      setCurrentLigne({
+        description: "",
+        quantite: 1,
+        prix_unitaire: 0,
+        montant: 0
+      });
+    }
+  };
+
+  const removeLigne = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      lignes: prev.lignes.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = {
+        ...formData,
+        taux_tva: parseFloat(formData.taux_tva),
+        date_validite: formData.date_validite ? new Date(formData.date_validite).toISOString() : null
+      };
+
+      if (editingDevis) {
+        await axios.put(`${API}/devis/${editingDevis.id}`, data);
+        toast.success("Devis modifié avec succès");
+      } else {
+        await axios.post(`${API}/devis`, data);
+        toast.success("Devis créé avec succès");
+      }
+      setShowForm(false);
+      setEditingDevis(null);
+      resetForm();
+      fetchDevis();
+    } catch (error) {
+      toast.error("Erreur lors de l'opération");
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      client_id: "",
+      affaire_id: "",
+      titre: "",
+      lignes: [],
+      taux_tva: 20.0,
+      date_validite: ""
+    });
+    setCurrentLigne({
+      description: "",
+      quantite: 1,
+      prix_unitaire: 0,
+      montant: 0
+    });
+  };
+
+  const editDevis = (devis) => {
+    setEditingDevis(devis);
+    setFormData({
+      client_id: devis.client_id,
+      affaire_id: devis.affaire_id || "",
+      titre: devis.titre,
+      lignes: [...devis.lignes],
+      taux_tva: devis.taux_tva,
+      date_validite: devis.date_validite ? new Date(devis.date_validite).toISOString().split('T')[0] : ""
+    });
+    setShowForm(true);
+  };
+
+  const deleteDevis = async (devisId) => {
+    try {
+      await axios.delete(`${API}/devis/${devisId}`);
+      toast.success("Devis supprimé");
+      fetchDevis();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const getStatutBadge = (statut) => {
+    const colors = {
+      brouillon: "bg-gray-100 text-gray-800",
+      envoye: "bg-blue-100 text-blue-800",
+      accepte: "bg-green-100 text-green-800",
+      refuse: "bg-red-100 text-red-800",
+      expire: "bg-orange-100 text-orange-800"
+    };
+    return colors[statut] || "bg-gray-100 text-gray-800";
+  };
+
+  const getClientName = (clientId) => {
+    const client = clients.find(c => c.id === clientId);
+    return client ? `${client.prenom} ${client.nom} (${client.entreprise})` : "Client inconnu";
+  };
+
+  // Filtrage et recherche
+  const filteredDevis = devisList.filter(devis => {
+    const clientName = getClientName(devis.client_id);
+    const matchesSearch = !searchTerm || 
+      devis.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      devis.titre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      clientName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = !filters.statut || devis.statut === filters.statut;
+    const matchesClient = !filters.client_id || devis.client_id === filters.client_id;
+    
+    return matchesSearch && matchesStatus && matchesClient;
+  });
+
+  const filterOptions = [
+    {
+      key: "statut",
+      placeholder: "Filtrer par statut",
+      options: [
+        { value: "brouillon", label: "Brouillon" },
+        { value: "envoye", label: "Envoyé" },
+        { value: "accepte", label: "Accepté" },
+        { value: "refuse", label: "Refusé" },
+        { value: "expire", label: "Expiré" }
+      ]
+    },
+    {
+      key: "client_id",
+      placeholder: "Filtrer par client",
+      options: clients.map(client => ({
+        value: client.id,
+        label: `${client.prenom} ${client.nom} (${client.entreprise})`
+      }))
+    }
+  ];
+
+  const calculateTotals = () => {
+    const montantHT = formData.lignes.reduce((sum, ligne) => sum + ligne.montant, 0);
+    const montantTVA = montantHT * (formData.taux_tva / 100);
+    const montantTTC = montantHT + montantTVA;
+    return { montantHT, montantTVA, montantTTC };
+  };
+
+  const { montantHT, montantTVA, montantTTC } = calculateTotals();
+
+  if (loading) return <div className="p-8">Chargement...</div>;
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Devis</h1>
+          <p className="text-gray-600">Créez et gérez vos devis clients</p>
+        </div>
+        <Dialog open={showForm} onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) {
+            setEditingDevis(null);
+            resetForm();
+          }
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouveau devis
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingDevis ? "Modifier le devis" : "Créer un nouveau devis"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingDevis ? "Modifiez les informations du devis." : "Créez un nouveau devis avec les lignes de prestations."}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="client_id">Client *</Label>
+                  <Select
+                    value={formData.client_id}
+                    onValueChange={(value) => setFormData({...formData, client_id: value})}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.prenom} {client.nom} ({client.entreprise})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="affaire_id">Affaire (optionnel)</Label>
+                  <Select
+                    value={formData.affaire_id}
+                    onValueChange={(value) => setFormData({...formData, affaire_id: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner une affaire" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Aucune affaire</SelectItem>
+                      {affaires
+                        .filter(affaire => !formData.client_id || affaire.client_id === formData.client_id)
+                        .map((affaire) => (
+                        <SelectItem key={affaire.id} value={affaire.id}>
+                          {affaire.titre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="titre">Titre du devis *</Label>
+                <Input
+                  id="titre"
+                  value={formData.titre}
+                  onChange={(e) => setFormData({...formData, titre: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="taux_tva">Taux TVA (%)</Label>
+                  <Input
+                    id="taux_tva"
+                    type="number"
+                    step="0.1"
+                    value={formData.taux_tva}
+                    onChange={(e) => setFormData({...formData, taux_tva: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="date_validite">Date de validité</Label>
+                  <Input
+                    id="date_validite"
+                    type="date"
+                    value={formData.date_validite}
+                    onChange={(e) => setFormData({...formData, date_validite: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              {/* Lignes du devis */}
+              <div>
+                <Label className="text-base font-semibold">Lignes du devis</Label>
+                
+                {/* Formulaire d'ajout de ligne */}
+                <div className="mt-2 p-4 border rounded-lg bg-gray-50">
+                  <div className="grid grid-cols-4 gap-2 mb-2">
+                    <div>
+                      <Label htmlFor="description">Description</Label>
+                      <Input
+                        id="description"
+                        value={currentLigne.description}
+                        onChange={(e) => setCurrentLigne({...currentLigne, description: e.target.value})}
+                        placeholder="Description de la prestation"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="quantite">Quantité</Label>
+                      <Input
+                        id="quantite"
+                        type="number"
+                        step="0.01"
+                        value={currentLigne.quantite}
+                        onChange={(e) => setCurrentLigne({...currentLigne, quantite: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="prix_unitaire">Prix unitaire (€)</Label>
+                      <Input
+                        id="prix_unitaire"
+                        type="number"
+                        step="0.01"
+                        value={currentLigne.prix_unitaire}
+                        onChange={(e) => setCurrentLigne({...currentLigne, prix_unitaire: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <Label>Montant (€)</Label>
+                      <div className="px-3 py-2 bg-white border rounded text-right">
+                        {currentLigne.montant.toFixed(2)} €
+                      </div>
+                    </div>
+                  </div>
+                  <Button type="button" onClick={addLigne} size="sm">
+                    <Plus className="w-3 h-3 mr-1" />
+                    Ajouter la ligne
+                  </Button>
+                </div>
+
+                {/* Liste des lignes */}
+                {formData.lignes.length > 0 && (
+                  <div className="mt-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Quantité</TableHead>
+                          <TableHead>Prix unitaire</TableHead>
+                          <TableHead>Montant</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {formData.lignes.map((ligne, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{ligne.description}</TableCell>
+                            <TableCell>{ligne.quantite}</TableCell>
+                            <TableCell>{ligne.prix_unitaire.toFixed(2)} €</TableCell>
+                            <TableCell>{ligne.montant.toFixed(2)} €</TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => removeLigne(index)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+
+                    {/* Totaux */}
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                      <div className="text-right space-y-1">
+                        <div>Total HT: <span className="font-semibold">{montantHT.toFixed(2)} €</span></div>
+                        <div>TVA ({formData.taux_tva}%): <span className="font-semibold">{montantTVA.toFixed(2)} €</span></div>
+                        <div className="text-lg border-t pt-1">
+                          Total TTC: <span className="font-bold">{montantTTC.toFixed(2)} €</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowForm(false);
+                  setEditingDevis(null);
+                  resetForm();
+                }}>
+                  Annuler
+                </Button>
+                <Button type="submit">
+                  {editingDevis ? "Modifier" : "Créer"} le devis
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <SearchAndFilter
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filters={filters}
+        setFilters={setFilters}
+        filterOptions={filterOptions}
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Liste des devis</CardTitle>
+          <CardDescription>
+            {filteredDevis.length} devis {searchTerm || Object.keys(filters).length > 0 ? 'trouvé(s)' : 'enregistré(s)'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Numéro</TableHead>
+                <TableHead>Titre</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Montant TTC</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Date création</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredDevis.map((devis) => (
+                <TableRow key={devis.id}>
+                  <TableCell>
+                    <div className="font-mono font-medium">{devis.numero}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{devis.titre}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">{getClientName(devis.client_id)}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center font-medium">
+                      <Euro className="w-4 h-4 mr-1 text-green-600" />
+                      {devis.montant_ttc.toFixed(2)} €
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getStatutBadge(devis.statut)}>
+                      {devis.statut}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(devis.date_creation).toLocaleDateString('fr-FR')}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => editDevis(devis)}
+                      >
+                        <Edit className="w-3 h-3" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer ce devis ? Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteDevis(devis.id)}>
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// Optimisation Fiscale SASU (code existant maintenu)
 const OptimisationFiscale = () => {
   const [simulation, setSimulation] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -845,9 +2366,9 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/prospects" element={<Prospects />} />
               <Route path="/clients" element={<Clients />} />
-              <Route path="/affaires" element={<div className="p-8">Affaires - En développement</div>} />
-              <Route path="/actions" element={<div className="p-8">Actions - En développement</div>} />
-              <Route path="/devis" element={<div className="p-8">Devis - En développement</div>} />
+              <Route path="/affaires" element={<Affaires />} />
+              <Route path="/actions" element={<Actions />} />
+              <Route path="/devis" element={<Devis />} />
               <Route path="/optimisation-fiscale" element={<OptimisationFiscale />} />
             </Routes>
           </div>
