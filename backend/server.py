@@ -475,6 +475,261 @@ async def delete_devis(devis_id: str):
         raise HTTPException(status_code=404, detail="Devis non trouvé")
     return {"message": "Devis supprimé"}
 
+# --- OPTIMISATION FISCALE SASU ---
+
+class SituationFamiliale(str, Enum):
+    CELIBATAIRE = "celibataire"
+    MARIE = "marie"
+    PACS = "pacs"
+
+class OptimisationRequest(BaseModel):
+    ca_previsionnel: float
+    charges_deductibles: float = 0.0
+    situation_familiale: SituationFamiliale = SituationFamiliale.CELIBATAIRE
+    nombre_parts: float = 1.0
+    autres_revenus: float = 0.0
+    patrimoine_existant: float = 0.0
+
+class ScenarioFiscal(BaseModel):
+    remuneration_brute: float
+    dividendes_bruts: float
+    is_a_payer: float
+    cotisations_sociales: float
+    ir_sur_remuneration: float
+    ir_sur_dividendes: float
+    prelevement_sociaux_dividendes: float
+    total_impots_et_charges: float
+    net_disponible: float
+    taux_global_imposition: float
+
+class OptimisationResponse(BaseModel):
+    ca_previsionnel: float
+    resultat_avant_is: float
+    scenario_optimal: ScenarioFiscal
+    scenario_remuneration_max: ScenarioFiscal
+    scenario_dividendes_max: ScenarioFiscal
+    recommandations: List[str]
+
+def calcul_is_2025(benefice: float) -> float:
+    """Calcul de l'impôt sur les sociétés 2025"""
+    if benefice <= 0:
+        return 0.0
+    
+    is_total = 0.0
+    
+    # Tranche à 15% jusqu'à 42 500€
+    if benefice <= 42500:
+        is_total = benefice * 0.15
+    else:
+        # 15% sur les premiers 42 500€
+        is_total = 42500 * 0.15
+        # 25% sur le surplus
+        is_total += (benefice - 42500) * 0.25
+    
+    return is_total
+
+def calcul_ir_2025(revenu_imposable: float, nombre_parts: float = 1.0) -> float:
+    """Calcul de l'impôt sur le revenu 2025 avec barème progressif"""
+    if revenu_imposable <= 0:
+        return 0.0
+    
+    # Quotient familial
+    quotient = revenu_imposable / nombre_parts
+    
+    # Barème IR 2025 par part
+    tranches = [
+        (0, 11294, 0.0),      # 0%
+        (11294, 28797, 0.11), # 11%
+        (28797, 82341, 0.30), # 30%
+        (82341, 177106, 0.41), # 41%
+        (177106, float('inf'), 0.45) # 45%
+    ]
+    
+    ir_par_part = 0.0
+    
+    for i, (min_tranche, max_tranche, taux) in enumerate(tranches):
+        if quotient > min_tranche:
+            base_imposable = min(quotient, max_tranche) - min_tranche
+            ir_par_part += base_imposable * taux
+    
+    return ir_par_part * nombre_parts
+
+def calcul_cotisations_sociales_dirigeant(remuneration_brute: float) -> float:
+    """Calcul des cotisations sociales pour dirigeant SASU"""
+    if remuneration_brute <= 0:
+        return 0.0
+    
+    # Approximation globale des cotisations dirigeant SASU (≈ 45%)
+    return remuneration_brute * 0.45
+
+def calcul_ir_dividendes(dividendes_nets: float) -> float:
+    """Calcul IR sur dividendes avec flat tax 12.8%"""
+    return dividendes_nets * 0.128
+
+def calcul_prelevements_sociaux_dividendes(dividendes_nets: float) -> float:
+    """Calcul prélèvements sociaux sur dividendes 17.2%"""
+    return dividendes_nets * 0.172
+
+def calculer_scenario(ca: float, charges: float, remuneration_brute: float, 
+                     situation_familiale: SituationFamiliale, nombre_parts: float,
+                     autres_revenus: float) -> ScenarioFiscal:
+    """Calcule un scénario fiscal complet"""
+    
+    # Calcul du résultat avant IS
+    cotisations_sociales = calcul_cotisations_sociales_dirigeant(remuneration_brute)
+    resultat_avant_is = ca - charges - remuneration_brute - cotisations_sociales
+    
+    # IS
+    is_a_payer = calcul_is_2025(resultat_avant_is)
+    
+    # Dividendes disponibles
+    resultat_net = resultat_avant_is - is_a_payer
+    dividendes_bruts = max(0, resultat_net)
+    
+    # IR sur rémunération (avec abattement de 10% plafonné)
+    remuneration_nette = remuneration_brute - cotisations_sociales
+    abattement = min(remuneration_nette * 0.10, 12829)  # Plafond 2025
+    base_ir_remuneration = max(0, remuneration_nette - abattement)
+    revenu_total_ir = base_ir_remuneration + autres_revenus
+    
+    ir_sur_remuneration = calcul_ir_2025(revenu_total_ir, nombre_parts)
+    
+    # Fiscalité des dividendes
+    ir_sur_dividendes = calcul_ir_dividendes(dividendes_bruts)
+    prelevement_sociaux_dividendes = calcul_prelevements_sociaux_dividendes(dividendes_bruts)
+    
+    # Totaux
+    total_impots_et_charges = (cotisations_sociales + is_a_payer + ir_sur_remuneration + 
+                              ir_sur_dividendes + prelevement_sociaux_dividendes)
+    
+    dividendes_nets = dividendes_bruts - ir_sur_dividendes - prelevement_sociaux_dividendes
+    net_disponible = remuneration_nette + dividendes_nets
+    
+    taux_global = (total_impots_et_charges / ca * 100) if ca > 0 else 0
+    
+    return ScenarioFiscal(
+        remuneration_brute=remuneration_brute,
+        dividendes_bruts=dividendes_bruts,
+        is_a_payer=is_a_payer,
+        cotisations_sociales=cotisations_sociales,
+        ir_sur_remuneration=ir_sur_remuneration,
+        ir_sur_dividendes=ir_sur_dividendes,
+        prelevement_sociaux_dividendes=prelevement_sociaux_dividendes,
+        total_impots_et_charges=total_impots_et_charges,
+        net_disponible=net_disponible,
+        taux_global_imposition=taux_global
+    )
+
+def generer_recommandations(ca: float, scenario_optimal: ScenarioFiscal, 
+                           scenario_rem: ScenarioFiscal, scenario_div: ScenarioFiscal) -> List[str]:
+    """Génère des recommandations personnalisées"""
+    recommandations = []
+    
+    if scenario_optimal.remuneration_brute > 0:
+        recommandations.append(
+            f"💡 Rémunération optimale : {scenario_optimal.remuneration_brute:,.0f}€ bruts annuels"
+        )
+    
+    if scenario_optimal.dividendes_bruts > 0:
+        recommandations.append(
+            f"💰 Dividendes optimaux : {scenario_optimal.dividendes_bruts:,.0f}€ bruts"
+        )
+    
+    if scenario_optimal.taux_global_imposition < 35:
+        recommandations.append("✅ Votre taux global d'imposition est très avantageux")
+    elif scenario_optimal.taux_global_imposition < 45:
+        recommandations.append("⚠️ Taux d'imposition modéré, possibilité d'optimisation")
+    else:
+        recommandations.append("🔍 Taux d'imposition élevé, optimisation recommandée")
+    
+    if ca > 100000:
+        recommandations.append("📈 Avec ce niveau de CA, pensez aux investissements déductibles")
+    
+    if scenario_optimal.remuneration_brute < 45000:
+        recommandations.append("💼 Profitez du taux réduit IS de 15% jusqu'à 42 500€ de bénéfices")
+    
+    return recommandations
+
+@api_router.post("/optimisation-fiscale", response_model=OptimisationResponse)
+async def optimiser_fiscalite_sasu(request: OptimisationRequest):
+    """Calcule l'optimisation fiscale pour une SASU"""
+    
+    ca = request.ca_previsionnel
+    charges = request.charges_deductibles
+    resultat_avant_is = ca - charges
+    
+    if resultat_avant_is <= 0:
+        raise HTTPException(status_code=400, detail="Le résultat avant IS doit être positif")
+    
+    scenarios = []
+    
+    # Teste différents niveaux de rémunération (de 0 à 80% du résultat)
+    for i in range(0, 81, 5):  # Par pas de 5%
+        rem_test = (resultat_avant_is * i / 100)
+        scenario = calculer_scenario(
+            ca, charges, rem_test, 
+            request.situation_familiale, request.nombre_parts, request.autres_revenus
+        )
+        scenarios.append(scenario)
+    
+    # Trouve le scénario optimal (net disponible maximum)
+    scenario_optimal = max(scenarios, key=lambda s: s.net_disponible)
+    
+    # Scénarios de comparaison
+    scenario_remuneration_max = calculer_scenario(
+        ca, charges, resultat_avant_is * 0.8,  # 80% en rémunération
+        request.situation_familiale, request.nombre_parts, request.autres_revenus
+    )
+    
+    scenario_dividendes_max = calculer_scenario(
+        ca, charges, 0,  # 0% en rémunération
+        request.situation_familiale, request.nombre_parts, request.autres_revenus
+    )
+    
+    recommandations = generer_recommandations(ca, scenario_optimal, scenario_remuneration_max, scenario_dividendes_max)
+    
+    return OptimisationResponse(
+        ca_previsionnel=ca,
+        resultat_avant_is=resultat_avant_is,
+        scenario_optimal=scenario_optimal,
+        scenario_remuneration_max=scenario_remuneration_max,
+        scenario_dividendes_max=scenario_dividendes_max,
+        recommandations=recommandations
+    )
+
+@api_router.get("/baremes-fiscaux-2025")
+async def get_baremes_fiscaux():
+    """Retourne les barèmes fiscaux 2025"""
+    return {
+        "is": {
+            "description": "Impôt sur les sociétés 2025",
+            "tranches": [
+                {"min": 0, "max": 42500, "taux": 15, "description": "Taux réduit PME"},
+                {"min": 42500, "max": None, "taux": 25, "description": "Taux normal"}
+            ]
+        },
+        "ir": {
+            "description": "Impôt sur le revenu 2025 (par part)",
+            "tranches": [
+                {"min": 0, "max": 11294, "taux": 0, "description": "Tranche 0%"},
+                {"min": 11294, "max": 28797, "taux": 11, "description": "Tranche 11%"},
+                {"min": 28797, "max": 82341, "taux": 30, "description": "Tranche 30%"},
+                {"min": 82341, "max": 177106, "taux": 41, "description": "Tranche 41%"},
+                {"min": 177106, "max": None, "taux": 45, "description": "Tranche 45%"}
+            ]
+        },
+        "dividendes": {
+            "description": "Fiscalité des dividendes",
+            "prelevement_sociaux": 17.2,
+            "ir_flat_tax": 12.8,
+            "total_flat_tax": 30.0
+        },
+        "cotisations_dirigeant": {
+            "description": "Cotisations sociales dirigeant SASU",
+            "taux_approximatif": 45.0
+        }
+    }
+
 # --- DASHBOARD ---
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats():
