@@ -657,7 +657,7 @@ const OptimisationFiscale = () => {
               </CardHeader>
               <CardContent className="text-xs space-y-2">
                 <div>
-                  <strong>IS :</strong> 15% (≤42,5k€), 25% (>42,5k€)
+                  <strong>IS :</strong> 15% (≤42,5k€), 25% (&gt;42,5k€)
                 </div>
                 <div>
                   <strong>Dividendes :</strong> Flat tax 30%
