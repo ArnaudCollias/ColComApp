@@ -648,6 +648,7 @@ class CRMAPITester:
         print(f"✅ Actions CRUD: {'PASS' if actions_ok else 'FAIL'}")
         print(f"✅ Devis CRUD: {'PASS' if devis_ok else 'FAIL'}")
         print(f"✅ Error Handling: {'PASS' if errors_ok else 'FAIL'}")
+        print(f"✅ Optimisation Fiscale: {'PASS' if fiscal_ok else 'FAIL'}")
         
         return self.tests_passed == self.tests_run
 
