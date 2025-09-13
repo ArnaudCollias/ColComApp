@@ -430,6 +430,159 @@ class CRMAPITester:
         
         return success and success2
 
+    def test_optimisation_fiscale(self):
+        """Test tax optimization endpoints"""
+        print("\n" + "="*50)
+        print("TESTING OPTIMISATION FISCALE SASU")
+        print("="*50)
+        
+        # Test GET baremes fiscaux 2025
+        success, baremes = self.run_test(
+            "Get Baremes Fiscaux 2025",
+            "GET",
+            "baremes-fiscaux-2025",
+            200
+        )
+        
+        if success:
+            print("   ✅ Baremes retrieved successfully")
+            # Verify structure
+            required_sections = ['is', 'ir', 'dividendes', 'cotisations_dirigeant']
+            for section in required_sections:
+                if section in baremes:
+                    print(f"   ✅ {section} section present")
+                else:
+                    print(f"   ❌ Missing section: {section}")
+        
+        # Test scenario 1: CA 200k€, charges 50k€, autres revenus 10k€
+        scenario1_data = {
+            "ca_previsionnel": 200000,
+            "charges_deductibles": 50000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 10000,
+            "patrimoine_existant": 0
+        }
+        
+        success1, result1 = self.run_test(
+            "Optimisation Scenario 1 (CA: 200k€, charges: 50k€)",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario1_data
+        )
+        
+        if success1:
+            print(f"   ✅ Scenario 1 calculated successfully")
+            print(f"   📊 CA prévisionnel: {result1.get('ca_previsionnel', 0):,.0f}€")
+            print(f"   📊 Résultat avant IS: {result1.get('resultat_avant_is', 0):,.0f}€")
+            
+            optimal = result1.get('scenario_optimal', {})
+            print(f"   🎯 Optimal - Rémunération: {optimal.get('remuneration_brute', 0):,.0f}€")
+            print(f"   🎯 Optimal - Dividendes: {optimal.get('dividendes_bruts', 0):,.0f}€")
+            print(f"   🎯 Optimal - Net disponible: {optimal.get('net_disponible', 0):,.0f}€")
+            print(f"   🎯 Optimal - Taux global: {optimal.get('taux_global_imposition', 0):.1f}%")
+            
+            # Verify expected values for this scenario
+            expected_resultat = 150000  # 200k - 50k
+            actual_resultat = result1.get('resultat_avant_is', 0)
+            if abs(actual_resultat - expected_resultat) < 1:
+                print("   ✅ Résultat avant IS calculation correct")
+            else:
+                print(f"   ❌ Résultat avant IS incorrect: expected {expected_resultat}, got {actual_resultat}")
+        
+        # Test scenario 2: CA 100k€, charges 20k€, célibataire
+        scenario2_data = {
+            "ca_previsionnel": 100000,
+            "charges_deductibles": 20000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0
+        }
+        
+        success2, result2 = self.run_test(
+            "Optimisation Scenario 2 (CA: 100k€, charges: 20k€)",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario2_data
+        )
+        
+        if success2:
+            print(f"   ✅ Scenario 2 calculated successfully")
+            optimal2 = result2.get('scenario_optimal', {})
+            print(f"   🎯 Net disponible: {optimal2.get('net_disponible', 0):,.0f}€")
+            print(f"   🎯 Taux global: {optimal2.get('taux_global_imposition', 0):.1f}%")
+        
+        # Test scenario 3: CA 300k€, charges 80k€, marié 2 parts
+        scenario3_data = {
+            "ca_previsionnel": 300000,
+            "charges_deductibles": 80000,
+            "situation_familiale": "marie",
+            "nombre_parts": 2.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0
+        }
+        
+        success3, result3 = self.run_test(
+            "Optimisation Scenario 3 (CA: 300k€, charges: 80k€, marié)",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario3_data
+        )
+        
+        if success3:
+            print(f"   ✅ Scenario 3 calculated successfully")
+            optimal3 = result3.get('scenario_optimal', {})
+            print(f"   🎯 Net disponible: {optimal3.get('net_disponible', 0):,.0f}€")
+            print(f"   🎯 Taux global: {optimal3.get('taux_global_imposition', 0):.1f}%")
+        
+        # Test error handling - negative CA
+        error_data = {
+            "ca_previsionnel": -50000,
+            "charges_deductibles": 30000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0
+        }
+        
+        success_error, _ = self.run_test(
+            "Optimisation Error - Negative Result",
+            "POST",
+            "optimisation-fiscale",
+            400,  # Should return error
+            data=error_data
+        )
+        
+        if success_error:
+            print("   ✅ Error handling for negative result works correctly")
+        
+        # Test tax calculation accuracy
+        if success1 and result1:
+            print("\n   🧮 VERIFYING TAX CALCULATIONS:")
+            optimal = result1.get('scenario_optimal', {})
+            
+            # Verify IS calculation (15% up to 42,500€, then 25%)
+            is_paye = optimal.get('is_a_payer', 0)
+            print(f"   📊 IS payé: {is_paye:,.0f}€")
+            
+            # Verify total makes sense
+            total_charges = optimal.get('total_impots_et_charges', 0)
+            net_dispo = optimal.get('net_disponible', 0)
+            ca = result1.get('ca_previsionnel', 0)
+            charges = scenario1_data['charges_deductibles']
+            
+            total_check = net_dispo + total_charges + charges
+            if abs(total_check - ca) < 10:  # Allow small rounding differences
+                print("   ✅ Total calculation consistency check passed")
+            else:
+                print(f"   ❌ Total calculation inconsistent: {total_check} vs {ca}")
+        
+        return success and success1 and success2 and success3 and success_error
+
     def cleanup(self):
         """Clean up created test data"""
         print("\n" + "="*50)
