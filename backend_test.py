@@ -624,6 +624,9 @@ class CRMAPITester:
         # Test error handling
         errors_ok = self.test_error_handling()
         
+        # Test tax optimization (new module)
+        fiscal_ok = self.test_optimisation_fiscale()
+        
         # Clean up
         self.cleanup()
         
