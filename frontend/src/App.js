@@ -30,6 +30,7 @@ const Navigation = () => {
     { path: "/affaires", label: "Affaires", icon: Target },
     { path: "/actions", label: "Actions", icon: Calendar },
     { path: "/devis", label: "Devis", icon: FileText },
+    { path: "/optimisation-fiscale", label: "Optimisation fiscale", icon: Calculator },
   ];
 
   return (
