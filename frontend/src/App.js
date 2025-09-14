@@ -1518,7 +1518,9 @@ const Devis = () => {
   };
 
   const calculateMontantLigne = () => {
-    const montant = parseFloat(currentLigne.quantite) * parseFloat(currentLigne.prix_unitaire);
+    const quantite = parseFloat(currentLigne.quantite) || 0;
+    const prixUnitaire = parseFloat(currentLigne.prix_unitaire) || 0;
+    const montant = quantite * prixUnitaire;
     setCurrentLigne(prev => ({...prev, montant}));
   };
 
