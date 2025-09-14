@@ -809,6 +809,9 @@ class CRMAPITester:
         # Test tax optimization (new module)
         fiscal_ok = self.test_optimisation_fiscale()
         
+        # Test new salary net simulation (NEW FEATURE)
+        salary_net_ok = self.test_simulation_salaire_net()
+        
         # Clean up
         self.cleanup()
         
