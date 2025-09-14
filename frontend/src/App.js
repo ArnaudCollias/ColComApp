@@ -1675,8 +1675,8 @@ const Devis = () => {
   ];
 
   const calculateTotals = () => {
-    const montantHT = formData.lignes.reduce((sum, ligne) => sum + ligne.montant, 0);
-    const montantTVA = montantHT * (formData.taux_tva / 100);
+    const montantHT = formData.lignes.reduce((sum, ligne) => sum + (parseFloat(ligne.montant) || 0), 0);
+    const montantTVA = montantHT * (parseFloat(formData.taux_tva) / 100 || 0);
     const montantTTC = montantHT + montantTVA;
     return { montantHT, montantTVA, montantTTC };
   };
