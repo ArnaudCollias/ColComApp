@@ -661,6 +661,9 @@ class CRMAPITester:
         actions_ok = self.test_actions_crud() if affaires_ok else False
         devis_ok = self.test_devis_crud() if clients_ok else False
         
+        # Test new features
+        devis_status_ok = self.test_devis_status_change() if devis_ok else False
+        
         # Test error handling
         errors_ok = self.test_error_handling()
         
