@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import axios from "axios";
-import { Plus, Users, Target, Calendar, FileText, TrendingUp, Phone, Mail, Building, User, Calculator, PieChart, BarChart3, Search, Filter, Edit, Trash2, Eye, Euro, Clock, AlertCircle } from "lucide-react";
+import { Plus, Users, Target, Calendar, FileText, TrendingUp, Phone, Mail, Building, User, Calculator, PieChart, BarChart3, Search, Filter, Edit, Trash2, Eye, Euro, Clock, AlertCircle, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, LineChart, Line, Pie } from "recharts";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
