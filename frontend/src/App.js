@@ -2835,6 +2835,23 @@ const OptimisationFiscale = () => {
                       placeholder="0"
                     />
                   </div>
+
+                  {/* Nouveau champ pour rémunération nette souhaitée */}
+                  <div className="border-t pt-4">
+                    <Label htmlFor="remuneration_nette" className="text-sm font-semibold text-blue-700">
+                      💰 Contrainte rémunération nette (optionnel)
+                    </Label>
+                    <Input
+                      id="remuneration_nette"
+                      type="number"
+                      value={formData.remuneration_nette_souhaitee}
+                      onChange={(e) => setFormData({...formData, remuneration_nette_souhaitee: e.target.value})}
+                      placeholder="Ex: 45000"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Si rempli, l'optimisation respectera ce montant net de rémunération
+                    </p>
+                  </div>
                 </>
               ) : (
                 // Formulaire simulation par salaire net
