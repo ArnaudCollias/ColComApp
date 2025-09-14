@@ -1529,10 +1529,16 @@ const Devis = () => {
   }, [currentLigne.quantite, currentLigne.prix_unitaire]);
 
   const addLigne = () => {
-    if (currentLigne.description && currentLigne.quantite > 0 && currentLigne.prix_unitaire >= 0) {
+    if (currentLigne.description && parseFloat(currentLigne.quantite) > 0 && parseFloat(currentLigne.prix_unitaire) >= 0) {
+      const newLigne = {
+        ...currentLigne,
+        quantite: parseFloat(currentLigne.quantite) || 0,
+        prix_unitaire: parseFloat(currentLigne.prix_unitaire) || 0,
+        montant: parseFloat(currentLigne.montant) || 0
+      };
       setFormData(prev => ({
         ...prev,
-        lignes: [...prev.lignes, {...currentLigne}]
+        lignes: [...prev.lignes, newLigne]
       }));
       setCurrentLigne({
         description: "",
