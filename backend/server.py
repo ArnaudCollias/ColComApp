@@ -668,7 +668,136 @@ def generer_recommandations(ca: float, scenario_optimal: ScenarioFiscal,
     
     return recommandations
 
-@api_router.post("/optimisation-fiscale", response_model=OptimisationResponse)
+class SimulationNetRequest(BaseModel):
+    salaire_net_souhaite: float
+    situation_familiale: SituationFamiliale = SituationFamiliale.CELIBATAIRE
+    nombre_parts: float = 1.0
+    autres_revenus: float = 0.0
+
+class SimulationNetResponse(BaseModel):
+    salaire_net_souhaite: float
+    salaire_brut_necessaire: float
+    cotisations_sociales: float
+    ir_sur_salaire: float
+    salaire_net_reel: float
+    charges_patronales_estimees: float
+    cout_total_entreprise: float
+    taux_charges_sociales: float
+    taux_prelevement_total: float
+    recommandations: List[str]
+
+def calculer_salaire_brut_depuis_net(salaire_net_cible: float, situation_familiale: SituationFamiliale, 
+                                   nombre_parts: float, autres_revenus: float) -> dict:
+    """Calcule le salaire brut nécessaire pour obtenir un salaire net donné"""
+    
+    # Estimation initiale (approximation)
+    salaire_brut_estime = salaire_net_cible * 1.8  # Point de départ
+    
+    # Méthode itérative pour converger vers le bon salaire brut
+    for iteration in range(10):  # Maximum 10 itérations
+        cotisations = calcul_cotisations_sociales_dirigeant(salaire_brut_estime)
+        salaire_net_avant_ir = salaire_brut_estime - cotisations
+        
+        # Calcul IR avec abattement
+        abattement = min(salaire_net_avant_ir * 0.10, 12829)
+        base_ir = max(0, salaire_net_avant_ir - abattement)
+        revenu_total_ir = base_ir + autres_revenus
+        ir_sur_salaire = calcul_ir_2025(revenu_total_ir, nombre_parts)
+        
+        salaire_net_reel = salaire_net_avant_ir - ir_sur_salaire
+        
+        # Si on est proche du net souhaité, on arrête
+        ecart = abs(salaire_net_reel - salaire_net_cible)
+        if ecart < 100:  # Précision de 100€
+            break
+            
+        # Ajustement pour la prochaine itération
+        ratio = salaire_net_cible / salaire_net_reel if salaire_net_reel > 0 else 1.1
+        salaire_brut_estime *= ratio
+    
+    return {
+        'salaire_brut': salaire_brut_estime,
+        'cotisations_sociales': cotisations,
+        'ir_sur_salaire': ir_sur_salaire,
+        'salaire_net_reel': salaire_net_reel
+    }
+
+def calculer_charges_patronales_estimees(salaire_brut: float) -> float:
+    """Estimation des charges patronales (approximation)"""
+    # Charges patronales approximatives : 42% du brut
+    return salaire_brut * 0.42
+
+def generer_recommandations_salaire_net(salaire_net_souhaite: float, calculs: dict, 
+                                       charges_patronales: float) -> List[str]:
+    """Génère des recommandations pour la simulation par salaire net"""
+    recommandations = []
+    
+    cout_total = calculs['salaire_brut'] + charges_patronales
+    taux_prelevement = ((calculs['salaire_brut'] - calculs['salaire_net_reel']) / calculs['salaire_brut'] * 100) if calculs['salaire_brut'] > 0 else 0
+    
+    recommandations.append(
+        f"💰 Pour {salaire_net_souhaite:,.0f}€ net, il faut {calculs['salaire_brut']:,.0f}€ brut"
+    )
+    
+    recommandations.append(
+        f"🏢 Coût total pour l'entreprise : {cout_total:,.0f}€ (charges patronales incluses)"
+    )
+    
+    if taux_prelevement < 35:
+        recommandations.append("✅ Taux de prélèvement avantageux pour ce niveau de salaire")
+    elif taux_prelevement < 45:
+        recommandations.append("⚠️ Taux de prélèvement modéré, optimisation possible")
+    else:
+        recommandations.append("🔍 Taux de prélèvement élevé, envisager l'optimisation dividendes")
+    
+    if salaire_net_souhaite > 50000:
+        recommandations.append("💡 Avec ce niveau de salaire, pensez à la répartition rémunération/dividendes")
+    
+    if calculs['ir_sur_salaire'] > 10000:
+        recommandations.append("📋 IR élevé : vérifiez les possibilités de défiscalisation")
+    
+    return recommandations
+
+@api_router.post("/simulation-salaire-net", response_model=SimulationNetResponse)
+async def simuler_par_salaire_net(request: SimulationNetRequest):
+    """Simule les charges et impacts fiscaux à partir d'un salaire net souhaité"""
+    
+    if request.salaire_net_souhaite <= 0:
+        raise HTTPException(status_code=400, detail="Le salaire net souhaité doit être positif")
+    
+    # Calculs pour obtenir le salaire net souhaité
+    calculs = calculer_salaire_brut_depuis_net(
+        request.salaire_net_souhaite,
+        request.situation_familiale,
+        request.nombre_parts,
+        request.autres_revenus
+    )
+    
+    # Estimation des charges patronales
+    charges_patronales = calculer_charges_patronales_estimees(calculs['salaire_brut'])
+    cout_total_entreprise = calculs['salaire_brut'] + charges_patronales
+    
+    # Taux de charges
+    taux_charges_sociales = (calculs['cotisations_sociales'] / calculs['salaire_brut'] * 100) if calculs['salaire_brut'] > 0 else 0
+    taux_prelevement_total = ((calculs['salaire_brut'] - calculs['salaire_net_reel']) / calculs['salaire_brut'] * 100) if calculs['salaire_brut'] > 0 else 0
+    
+    # Recommandations
+    recommandations = generer_recommandations_salaire_net(
+        request.salaire_net_souhaite, calculs, charges_patronales
+    )
+    
+    return SimulationNetResponse(
+        salaire_net_souhaite=request.salaire_net_souhaite,
+        salaire_brut_necessaire=calculs['salaire_brut'],
+        cotisations_sociales=calculs['cotisations_sociales'],
+        ir_sur_salaire=calculs['ir_sur_salaire'],
+        salaire_net_reel=calculs['salaire_net_reel'],
+        charges_patronales_estimees=charges_patronales,
+        cout_total_entreprise=cout_total_entreprise,
+        taux_charges_sociales=taux_charges_sociales,
+        taux_prelevement_total=taux_prelevement_total,
+        recommandations=recommandations
+    )
 async def optimiser_fiscalite_sasu(request: OptimisationRequest):
     """Calcule l'optimisation fiscale pour une SASU"""
     
