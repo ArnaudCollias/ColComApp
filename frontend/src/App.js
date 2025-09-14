@@ -1856,6 +1856,16 @@ const Devis = () => {
     }
   };
 
+  const deleteDevis = async (devisId) => {
+    try {
+      await axios.delete(`${API}/devis/${devisId}`);
+      toast.success("Devis supprimé");
+      fetchDevis();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
   const getStatutBadge = (statut) => {
     const colors = {
       brouillon: "bg-gray-100 text-gray-800",
