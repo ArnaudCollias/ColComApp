@@ -2918,7 +2918,10 @@ const OptimisationFiscale = () => {
                 className="w-full"
               >
                 {loading ? "Calcul en cours..." : 
-                 modeSimulation === "optimisation" ? "Calculer l'optimisation" : "Simuler le salaire net"}
+                 (modeSimulation === "optimisation" && formData.remuneration_nette_souhaitee ? 
+                  "Estimer avec contrainte rémunération" : 
+                  modeSimulation === "optimisation" ? "Calculer l'optimisation" : "Simuler le salaire net")
+                }
               </Button>
             </CardContent>
           </Card>
