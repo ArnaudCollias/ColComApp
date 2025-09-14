@@ -690,6 +690,7 @@ class CRMAPITester:
         print(f"✅ Affaires CRUD: {'PASS' if affaires_ok else 'FAIL'}")
         print(f"✅ Actions CRUD: {'PASS' if actions_ok else 'FAIL'}")
         print(f"✅ Devis CRUD: {'PASS' if devis_ok else 'FAIL'}")
+        print(f"✅ Devis Status Change (NEW): {'PASS' if devis_status_ok else 'FAIL'}")
         print(f"✅ Error Handling: {'PASS' if errors_ok else 'FAIL'}")
         print(f"✅ Optimisation Fiscale: {'PASS' if fiscal_ok else 'FAIL'}")
         
