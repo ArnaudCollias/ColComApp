@@ -2930,7 +2930,15 @@ const OptimisationFiscale = () => {
     setLoading(true);
     try {
       if (modeSimulation === "optimisation") {
-        const response = await axios.post(`${API}/optimisation-fiscale`, formData);
+        // Préparer les données en excluant la contrainte si elle est vide
+        const requestData = { ...formData };
+        if (!requestData.remuneration_nette_souhaitee || requestData.remuneration_nette_souhaitee === "") {
+          delete requestData.remuneration_nette_souhaitee;
+        } else {
+          requestData.remuneration_nette_souhaitee = parseFloat(requestData.remuneration_nette_souhaitee);
+        }
+        
+        const response = await axios.post(`${API}/optimisation-fiscale`, requestData);
         setSimulation(response.data);
         setSimulationNet(null);
         toast.success("Simulation d'optimisation calculée avec succès");
