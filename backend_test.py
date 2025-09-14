@@ -392,6 +392,44 @@ class CRMAPITester:
         
         return success
 
+    def test_devis_status_change(self):
+        """Test devis status change functionality (NEW FEATURE)"""
+        print("\n" + "="*50)
+        print("TESTING DEVIS STATUS CHANGE (NEW FEATURE)")
+        print("="*50)
+        
+        if not self.created_ids['devis']:
+            print("❌ No devis available for status change test")
+            return False
+        
+        devis_id = self.created_ids['devis'][0]
+        
+        # Test all status changes
+        statuses = ["envoye", "accepte", "refuse", "expire", "brouillon"]
+        
+        for status in statuses:
+            status_data = {"statut": status}
+            
+            success, updated_devis = self.run_test(
+                f"Change Devis Status to {status}",
+                "PATCH",
+                f"devis/{devis_id}/statut",
+                200,
+                data=status_data
+            )
+            
+            if success:
+                actual_status = updated_devis.get('statut')
+                if actual_status == status:
+                    print(f"   ✅ Status successfully changed to: {status}")
+                else:
+                    print(f"   ❌ Status change failed: expected {status}, got {actual_status}")
+                    return False
+            else:
+                return False
+        
+        return True
+
     def test_error_handling(self):
         """Test error handling"""
         print("\n" + "="*50)
