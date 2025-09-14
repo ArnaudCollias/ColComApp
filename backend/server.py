@@ -468,6 +468,24 @@ async def update_devis(devis_id: str, devis_data: DevisCreate):
     updated_devis = await db.devis.find_one({"id": devis_id})
     return Devis(**parse_from_mongo(updated_devis))
 
+@api_router.patch("/devis/{devis_id}/statut")
+async def update_devis_statut(devis_id: str, statut: dict):
+    """Met à jour le statut d'un devis"""
+    devis = await db.devis.find_one({"id": devis_id})
+    if not devis:
+        raise HTTPException(status_code=404, detail="Devis non trouvé")
+    
+    await db.devis.update_one(
+        {"id": devis_id}, 
+        {"$set": {
+            "statut": statut.get("statut"),
+            "date_modification": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated_devis = await db.devis.find_one({"id": devis_id})
+    return Devis(**parse_from_mongo(updated_devis))
+
 @api_router.delete("/devis/{devis_id}")
 async def delete_devis(devis_id: str):
     result = await db.devis.delete_one({"id": devis_id})
