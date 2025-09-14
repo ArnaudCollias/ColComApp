@@ -2612,7 +2612,8 @@ const OptimisationFiscale = () => {
     situation_familiale: "celibataire",
     nombre_parts: 1.0,
     autres_revenus: 0,
-    patrimoine_existant: 0
+    patrimoine_existant: 0,
+    remuneration_nette_souhaitee: "" // Nouveau champ
   });
   const [formDataNet, setFormDataNet] = useState({
     salaire_net_souhaite: 40000,
