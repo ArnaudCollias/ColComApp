@@ -1829,7 +1829,7 @@ const Devis = () => {
                     <div>
                       <Label>Montant (€)</Label>
                       <div className="px-3 py-2 bg-white border rounded text-right">
-                        {currentLigne.montant.toFixed(2)} €
+                        {(parseFloat(currentLigne.montant) || 0).toFixed(2)} €
                       </div>
                     </div>
                   </div>
