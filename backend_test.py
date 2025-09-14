@@ -623,6 +623,189 @@ class CRMAPITester:
         
         return success and success1 and success2 and success3 and success_error
 
+    def test_optimisation_fiscale_avec_contrainte(self):
+        """Test new tax optimization with net salary constraint feature"""
+        print("\n" + "="*50)
+        print("TESTING OPTIMISATION FISCALE AVEC CONTRAINTE RÉMUNÉRATION (NEW FEATURE)")
+        print("="*50)
+        
+        # Test scenario 1: CA 120k€, contrainte 35k€ net (réalisable)
+        scenario1_data = {
+            "ca_previsionnel": 120000,
+            "charges_deductibles": 0,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0,
+            "remuneration_nette_souhaitee": 35000
+        }
+        
+        success1, result1 = self.run_test(
+            "Optimisation avec contrainte 35k€ net (réalisable)",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario1_data
+        )
+        
+        if success1:
+            print(f"   ✅ Contrainte 35k€ net acceptée et calculée")
+            optimal = result1.get('scenario_optimal', {})
+            print(f"   🎯 Rémunération brute: {optimal.get('remuneration_brute', 0):,.0f}€")
+            print(f"   🎯 Dividendes bruts: {optimal.get('dividendes_bruts', 0):,.0f}€")
+            print(f"   🎯 Net disponible total: {optimal.get('net_disponible', 0):,.0f}€")
+            print(f"   🎯 Taux global: {optimal.get('taux_global_imposition', 0):.1f}%")
+            
+            # Vérifier que la contrainte est respectée (approximativement)
+            net_dispo = optimal.get('net_disponible', 0)
+            dividendes_nets = optimal.get('dividendes_bruts', 0) * 0.7  # Approximation après fiscalité
+            remuneration_nette_calculee = net_dispo - dividendes_nets
+            
+            if abs(remuneration_nette_calculee - 35000) < 2000:  # Tolérance de 2k€
+                print("   ✅ Contrainte de rémunération nette respectée")
+            else:
+                print(f"   ⚠️ Contrainte approximative: calculé {remuneration_nette_calculee:,.0f}€ vs souhaité 35,000€")
+        
+        # Test scenario 2: CA 120k€, contrainte 40k€ net (impossible)
+        scenario2_data = {
+            "ca_previsionnel": 120000,
+            "charges_deductibles": 0,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0,
+            "remuneration_nette_souhaitee": 40000
+        }
+        
+        success2, result2 = self.run_test(
+            "Optimisation avec contrainte 40k€ net (impossible)",
+            "POST",
+            "optimisation-fiscale",
+            400,  # Should return error
+            data=scenario2_data
+        )
+        
+        if success2:
+            print("   ✅ Contrainte impossible correctement rejetée")
+            # Vérifier le message d'erreur
+            if 'detail' in result2 and 'impossible' in result2['detail'].lower():
+                print("   ✅ Message d'erreur approprié fourni")
+        
+        # Test scenario 3: CA 200k€, contrainte 30k€ net (réalisable avec dividendes)
+        scenario3_data = {
+            "ca_previsionnel": 200000,
+            "charges_deductibles": 20000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0,
+            "remuneration_nette_souhaitee": 30000
+        }
+        
+        success3, result3 = self.run_test(
+            "Optimisation avec contrainte 30k€ net sur CA 200k€",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario3_data
+        )
+        
+        if success3:
+            print(f"   ✅ Contrainte 30k€ net sur gros CA calculée")
+            optimal3 = result3.get('scenario_optimal', {})
+            print(f"   🎯 Rémunération brute: {optimal3.get('remuneration_brute', 0):,.0f}€")
+            print(f"   🎯 Dividendes bruts: {optimal3.get('dividendes_bruts', 0):,.0f}€")
+            print(f"   🎯 Net disponible total: {optimal3.get('net_disponible', 0):,.0f}€")
+            print(f"   🎯 Taux global: {optimal3.get('taux_global_imposition', 0):.1f}%")
+            
+            # Vérifier qu'il y a bien des dividendes disponibles
+            dividendes = optimal3.get('dividendes_bruts', 0)
+            if dividendes > 10000:
+                print("   ✅ Dividendes disponibles après contrainte rémunération")
+            else:
+                print("   ⚠️ Peu ou pas de dividendes disponibles")
+        
+        # Test scenario 4: Comparaison avec/sans contrainte
+        scenario_sans_contrainte = {
+            "ca_previsionnel": 150000,
+            "charges_deductibles": 30000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0,
+            "patrimoine_existant": 0
+            # Pas de remuneration_nette_souhaitee
+        }
+        
+        success4a, result_sans = self.run_test(
+            "Optimisation SANS contrainte (référence)",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario_sans_contrainte
+        )
+        
+        scenario_avec_contrainte = scenario_sans_contrainte.copy()
+        scenario_avec_contrainte["remuneration_nette_souhaitee"] = 25000
+        
+        success4b, result_avec = self.run_test(
+            "Optimisation AVEC contrainte 25k€ net",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario_avec_contrainte
+        )
+        
+        if success4a and success4b:
+            print("   ✅ Comparaison avec/sans contrainte réussie")
+            
+            net_sans = result_sans.get('scenario_optimal', {}).get('net_disponible', 0)
+            net_avec = result_avec.get('scenario_optimal', {}).get('net_disponible', 0)
+            
+            print(f"   📊 Net disponible SANS contrainte: {net_sans:,.0f}€")
+            print(f"   📊 Net disponible AVEC contrainte: {net_avec:,.0f}€")
+            
+            if net_sans >= net_avec:
+                print("   ✅ Logique respectée: optimisation libre ≥ optimisation contrainte")
+            else:
+                print("   ❌ Problème: contrainte donne plus que optimisation libre")
+        
+        # Test scenario 5: Contrainte avec situation familiale complexe
+        scenario5_data = {
+            "ca_previsionnel": 180000,
+            "charges_deductibles": 40000,
+            "situation_familiale": "marie",
+            "nombre_parts": 2.5,  # Marié avec enfants
+            "autres_revenus": 15000,
+            "patrimoine_existant": 0,
+            "remuneration_nette_souhaitee": 32000
+        }
+        
+        success5, result5 = self.run_test(
+            "Optimisation avec contrainte - situation complexe",
+            "POST",
+            "optimisation-fiscale",
+            200,
+            data=scenario5_data
+        )
+        
+        if success5:
+            print(f"   ✅ Contrainte avec situation familiale complexe calculée")
+            optimal5 = result5.get('scenario_optimal', {})
+            print(f"   🎯 Taux global avec 2.5 parts: {optimal5.get('taux_global_imposition', 0):.1f}%")
+        
+        # Vérifier les recommandations spécifiques aux contraintes
+        if success1 and result1:
+            recommendations = result1.get('recommandations', [])
+            contrainte_mentions = [r for r in recommendations if 'contrainte' in r.lower() or 'respectée' in r.lower()]
+            if len(contrainte_mentions) > 0:
+                print("   ✅ Recommandations spécifiques aux contraintes présentes")
+                for rec in contrainte_mentions[:2]:
+                    print(f"   💡 {rec}")
+            else:
+                print("   ⚠️ Pas de recommandations spécifiques aux contraintes")
+        
+        return success1 and success2 and success3 and success4a and success4b and success5
+
     def test_simulation_salaire_net(self):
         """Test new salary net simulation endpoint"""
         print("\n" + "="*50)
