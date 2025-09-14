@@ -886,6 +886,7 @@ def generer_recommandations_avec_contrainte(ca: float, scenario_contraint: Scena
         recommandations.append("⚠️ Coût de la rémunération élevé par rapport au CA (>60%)")
     
     return recommandations
+@api_router.post("/optimisation-fiscale", response_model=OptimisationResponse)
 async def optimiser_fiscalite_sasu(request: OptimisationRequest):
     """Calcule l'optimisation fiscale pour une SASU"""
     
@@ -896,41 +897,92 @@ async def optimiser_fiscalite_sasu(request: OptimisationRequest):
     if resultat_avant_is <= 0:
         raise HTTPException(status_code=400, detail="Le résultat avant IS doit être positif")
     
-    scenarios = []
-    
-    # Teste différents niveaux de rémunération (de 0 à 80% du résultat)
-    for i in range(0, 81, 5):  # Par pas de 5%
-        rem_test = (resultat_avant_is * i / 100)
-        scenario = calculer_scenario(
-            ca, charges, rem_test, 
+    # Si une contrainte de rémunération nette est spécifiée
+    if request.remuneration_nette_souhaitee and request.remuneration_nette_souhaitee > 0:
+        # Vérification que la contrainte est réalisable
+        cout_remuneration_max = resultat_avant_is * 0.8  # Maximum raisonnable
+        calculs_test = calculer_salaire_brut_depuis_net(
+            request.remuneration_nette_souhaitee,
+            request.situation_familiale,
+            request.nombre_parts,
+            request.autres_revenus
+        )
+        cout_total_remuneration = calculs_test['salaire_brut'] + calculs_test['cotisations_sociales']
+        
+        if cout_total_remuneration > resultat_avant_is:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Rémunération nette de {request.remuneration_nette_souhaitee:,.0f}€ impossible avec ce CA. "
+                       f"Coût total : {cout_total_remuneration:,.0f}€, disponible : {resultat_avant_is:,.0f}€"
+            )
+        
+        # Calcul du scénario avec contrainte
+        scenario_contraint = calculer_scenario_avec_contrainte_remuneration(
+            ca, charges, request.remuneration_nette_souhaitee,
             request.situation_familiale, request.nombre_parts, request.autres_revenus
         )
-        scenarios.append(scenario)
+        
+        # Scénarios de comparaison (sans contrainte)
+        scenario_remuneration_max = calculer_scenario(
+            ca, charges, resultat_avant_is * 0.8,
+            request.situation_familiale, request.nombre_parts, request.autres_revenus
+        )
+        
+        scenario_dividendes_max = calculer_scenario(
+            ca, charges, 0,
+            request.situation_familiale, request.nombre_parts, request.autres_revenus
+        )
+        
+        recommandations = generer_recommandations_avec_contrainte(
+            ca, scenario_contraint, request.remuneration_nette_souhaitee
+        )
+        
+        return OptimisationResponse(
+            ca_previsionnel=ca,
+            resultat_avant_is=resultat_avant_is,
+            scenario_optimal=scenario_contraint,  # Le scénario contraint devient l'optimal
+            scenario_remuneration_max=scenario_remuneration_max,
+            scenario_dividendes_max=scenario_dividendes_max,
+            recommandations=recommandations
+        )
     
-    # Trouve le scénario optimal (net disponible maximum)
-    scenario_optimal = max(scenarios, key=lambda s: s.net_disponible)
-    
-    # Scénarios de comparaison
-    scenario_remuneration_max = calculer_scenario(
-        ca, charges, resultat_avant_is * 0.8,  # 80% en rémunération
-        request.situation_familiale, request.nombre_parts, request.autres_revenus
-    )
-    
-    scenario_dividendes_max = calculer_scenario(
-        ca, charges, 0,  # 0% en rémunération
-        request.situation_familiale, request.nombre_parts, request.autres_revenus
-    )
-    
-    recommandations = generer_recommandations(ca, scenario_optimal, scenario_remuneration_max, scenario_dividendes_max)
-    
-    return OptimisationResponse(
-        ca_previsionnel=ca,
-        resultat_avant_is=resultat_avant_is,
-        scenario_optimal=scenario_optimal,
-        scenario_remuneration_max=scenario_remuneration_max,
-        scenario_dividendes_max=scenario_dividendes_max,
-        recommandations=recommandations
-    )
+    else:
+        # Comportement normal (optimisation libre)
+        scenarios = []
+        
+        # Teste différents niveaux de rémunération (de 0 à 80% du résultat)
+        for i in range(0, 81, 5):  # Par pas de 5%
+            rem_test = (resultat_avant_is * i / 100)
+            scenario = calculer_scenario(
+                ca, charges, rem_test, 
+                request.situation_familiale, request.nombre_parts, request.autres_revenus
+            )
+            scenarios.append(scenario)
+        
+        # Trouve le scénario optimal (net disponible maximum)
+        scenario_optimal = max(scenarios, key=lambda s: s.net_disponible)
+        
+        # Scénarios de comparaison
+        scenario_remuneration_max = calculer_scenario(
+            ca, charges, resultat_avant_is * 0.8,  # 80% en rémunération
+            request.situation_familiale, request.nombre_parts, request.autres_revenus
+        )
+        
+        scenario_dividendes_max = calculer_scenario(
+            ca, charges, 0,  # 0% en rémunération
+            request.situation_familiale, request.nombre_parts, request.autres_revenus
+        )
+        
+        recommandations = generer_recommandations(ca, scenario_optimal, scenario_remuneration_max, scenario_dividendes_max)
+        
+        return OptimisationResponse(
+            ca_previsionnel=ca,
+            resultat_avant_is=resultat_avant_is,
+            scenario_optimal=scenario_optimal,
+            scenario_remuneration_max=scenario_remuneration_max,
+            scenario_dividendes_max=scenario_dividendes_max,
+            recommandations=recommandations
+        )
 
 @api_router.get("/baremes-fiscaux-2025")
 async def get_baremes_fiscaux():
