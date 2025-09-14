@@ -1736,7 +1736,7 @@ const Devis = () => {
                       <SelectValue placeholder="Sélectionner une affaire" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Aucune affaire</SelectItem>
+                      <SelectItem value="none">Aucune affaire</SelectItem>
                       {affaires
                         .filter(affaire => !formData.client_id || affaire.client_id === formData.client_id)
                         .map((affaire) => (
