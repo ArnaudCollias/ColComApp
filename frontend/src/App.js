@@ -3641,6 +3641,8 @@ const SimulationBusiness = () => {
     </div>
   );
 };
+// Composant principal
+function App() {
   return (
     <div className="App">
       <BrowserRouter>
@@ -3655,6 +3657,7 @@ const SimulationBusiness = () => {
               <Route path="/actions" element={<Actions />} />
               <Route path="/devis" element={<Devis />} />
               <Route path="/optimisation-fiscale" element={<OptimisationFiscale />} />
+              <Route path="/simulation-business" element={<SimulationBusiness />} />
             </Routes>
           </div>
         </div>
