@@ -1848,9 +1848,9 @@ const Devis = () => {
                         {formData.lignes.map((ligne, index) => (
                           <TableRow key={index}>
                             <TableCell>{ligne.description}</TableCell>
-                            <TableCell>{ligne.quantite}</TableCell>
-                            <TableCell>{ligne.prix_unitaire.toFixed(2)} €</TableCell>
-                            <TableCell>{ligne.montant.toFixed(2)} €</TableCell>
+                            <TableCell>{parseFloat(ligne.quantite) || 0}</TableCell>
+                            <TableCell>{(parseFloat(ligne.prix_unitaire) || 0).toFixed(2)} €</TableCell>
+                            <TableCell>{(parseFloat(ligne.montant) || 0).toFixed(2)} €</TableCell>
                             <TableCell>
                               <Button
                                 type="button"
