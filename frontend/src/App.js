@@ -533,6 +533,215 @@ const CalendarDashboard = () => {
     </>
   );
 };
+// Modal d'édition des événements du calendrier
+const EditEventModal = ({ isOpen, onClose, event, onSave, clients, affaires }) => {
+  const [formData, setFormData] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (event && isOpen) {
+      if (event.type === 'action') {
+        setFormData({
+          affaire_id: event.rawData.affaire_id,
+          type_action: event.rawData.type_action,
+          titre: event.rawData.titre,
+          description: event.rawData.description || "",
+          date_prevue: new Date(event.rawData.date_prevue).toISOString().split('T')[0],
+          statut: event.rawData.statut
+        });
+      } else if (event.type === 'devis') {
+        setFormData({
+          statut: event.rawData.statut
+        });
+      }
+    }
+  }, [event, isOpen]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await onSave(formData);
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getAffaireName = (affaireId) => {
+    const affaire = affaires.find(a => a.id === affaireId);
+    if (!affaire) return "Affaire inconnue";
+    
+    const client = clients.find(c => c.id === affaire.client_id);
+    return `${affaire.titre} (${client ? client.entreprise : 'Client inconnu'})`;
+  };
+
+  if (!event) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[525px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center">
+            {event.type === 'action' ? (
+              <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+            ) : (
+              <FileText className="w-5 h-5 mr-2 text-green-600" />
+            )}
+            Éditer {event.type === 'action' ? "l'action" : "le devis"}
+          </DialogTitle>
+          <DialogDescription>
+            Modifiez les informations de {event.type === 'action' ? "l'action" : "ce devis"} depuis le calendrier.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {event.type === 'action' ? (
+            // Formulaire pour les actions
+            <>
+              <div>
+                <Label htmlFor="affaire_id">Affaire *</Label>
+                <Select
+                  value={formData.affaire_id || ""}
+                  onValueChange={(value) => setFormData({...formData, affaire_id: value})}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner une affaire" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {affaires.map((affaire) => (
+                      <SelectItem key={affaire.id} value={affaire.id}>
+                        {getAffaireName(affaire.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="type_action">Type d'action *</Label>
+                <Select
+                  value={formData.type_action || ""}
+                  onValueChange={(value) => setFormData({...formData, type_action: value})}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="appel">Appel</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="rendez_vous">Rendez-vous</SelectItem>
+                    <SelectItem value="relance">Relance</SelectItem>
+                    <SelectItem value="autre">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="titre">Titre *</Label>
+                <Input
+                  id="titre"
+                  value={formData.titre || ""}
+                  onChange={(e) => setFormData({...formData, titre: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description || ""}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="date_prevue">Date prévue *</Label>
+                <Input
+                  id="date_prevue"
+                  type="date"
+                  value={formData.date_prevue || ""}
+                  onChange={(e) => setFormData({...formData, date_prevue: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="statut">Statut</Label>
+                <Select
+                  value={formData.statut || ""}
+                  onValueChange={(value) => setFormData({...formData, statut: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="a_faire">À faire</SelectItem>
+                    <SelectItem value="en_cours">En cours</SelectItem>
+                    <SelectItem value="termine">Terminé</SelectItem>
+                    <SelectItem value="annule">Annulé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : (
+            // Formulaire simplifié pour les devis (changement de statut uniquement)
+            <>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">Informations du devis</h4>
+                <div className="text-sm space-y-1">
+                  <div><strong>Numéro :</strong> {event.rawData.numero}</div>
+                  <div><strong>Titre :</strong> {event.rawData.titre}</div>
+                  <div><strong>Montant TTC :</strong> {event.rawData.montant_ttc?.toFixed(2)} €</div>
+                  <div><strong>Date de validité :</strong> {new Date(event.rawData.date_validite).toLocaleDateString('fr-FR')}</div>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="statut_devis">Statut du devis</Label>
+                <Select
+                  value={formData.statut || ""}
+                  onValueChange={(value) => setFormData({...formData, statut: value})}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="brouillon">Brouillon</SelectItem>
+                    <SelectItem value="envoye">Envoyé</SelectItem>
+                    <SelectItem value="accepte">Accepté</SelectItem>
+                    <SelectItem value="refuse">Refusé</SelectItem>
+                    <SelectItem value="expire">Expiré</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Seul le statut peut être modifié depuis le calendrier. 
+                  Pour modifier le contenu du devis, allez dans la section Devis.
+                </p>
+              </div>
+            </>
+          )}
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Sauvegarde..." : "Sauvegarder"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // Dashboard
 const Dashboard = () => {
   const [stats, setStats] = useState({});
