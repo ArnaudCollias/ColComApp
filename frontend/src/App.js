@@ -3224,8 +3224,423 @@ const OptimisationFiscale = () => {
   );
 };
 
-// Composant principal
-function App() {
+// Simulation Business
+const SimulationBusiness = () => {
+  const [caAnnuel, setCaAnnuel] = useState(200000);
+  const [joursAnnuels, setJoursAnnuels] = useState(220);
+  const [prixVente, setPrixVente] = useState(909); // CA/jours par défaut
+  const [variableLibre, setVariableLibre] = useState("prix"); // "ca", "jours", ou "prix"
+
+  // Calcul automatique de la variable dépendante
+  useEffect(() => {
+    if (variableLibre === "prix" && joursAnnuels > 0) {
+      setPrixVente(Math.round(caAnnuel / joursAnnuels));
+    } else if (variableLibre === "jours" && prixVente > 0) {
+      setJoursAnnuels(Math.round(caAnnuel / prixVente));
+    } else if (variableLibre === "ca") {
+      setCaAnnuel(joursAnnuels * prixVente);
+    }
+  }, [caAnnuel, joursAnnuels, prixVente, variableLibre]);
+
+  const handleCAChange = (newCA) => {
+    setCaAnnuel(newCA);
+    setVariableLibre("prix"); // Prix devient la variable calculée
+  };
+
+  const handleJoursChange = (newJours) => {
+    setJoursAnnuels(newJours);
+    setVariableLibre("prix"); // Prix devient la variable calculée
+  };
+
+  const handlePrixChange = (newPrix) => {
+    setPrixVente(newPrix);
+    setVariableLibre("ca"); // CA devient la variable calculée
+  };
+
+  // Calculs dérivés
+  const joursSemaine = (joursAnnuels / 52).toFixed(1);
+  const caMensuel = Math.round(caAnnuel / 12);
+  const caHebdomadaire = Math.round(caAnnuel / 52);
+  const joursParMois = Math.round(joursAnnuels / 12);
+
+  // Données pour les graphiques
+  const scenariosData = [
+    {
+      name: "Actuel",
+      ca: caAnnuel,
+      jours: joursAnnuels,
+      prix: prixVente,
+      joursSemaine: parseFloat(joursSemaine)
+    },
+    {
+      name: "Moins intensif",
+      ca: joursAnnuels * 0.8 * prixVente,
+      jours: joursAnnuels * 0.8,
+      prix: prixVente,
+      joursSemaine: (joursAnnuels * 0.8 / 52)
+    },
+    {
+      name: "Plus intensif",
+      ca: joursAnnuels * 1.2 * prixVente,
+      jours: joursAnnuels * 1.2,
+      prix: prixVente,
+      joursSemaine: (joursAnnuels * 1.2 / 52)
+    },
+    {
+      name: "Prix +20%",
+      ca: joursAnnuels * prixVente * 1.2,
+      jours: joursAnnuels,
+      prix: prixVente * 1.2,
+      joursSemaine: parseFloat(joursSemaine)
+    }
+  ];
+
+  const getRecommandations = () => {
+    const recommandations = [];
+    
+    if (parseFloat(joursSemaine) > 5) {
+      recommandations.push("⚠️ Attention : Plus de 5 jours par semaine peut impacter l'équilibre vie-travail");
+    } else if (parseFloat(joursSemaine) < 3) {
+      recommandations.push("💡 Moins de 3 jours par semaine : potentiel d'augmentation de l'activité");
+    } else {
+      recommandations.push("✅ Rythme de travail équilibré entre 3 et 5 jours par semaine");
+    }
+
+    if (prixVente < 300) {
+      recommandations.push("💰 Prix journalier faible : envisagez une revalorisation tarifaire");
+    } else if (prixVente > 1500) {
+      recommandations.push("🎯 Prix journalier élevé : positionnement premium confirmé");
+    }
+
+    if (caAnnuel < 50000) {
+      recommandations.push("📈 CA faible : focus sur l'augmentation du volume ou des prix");
+    } else if (caAnnuel > 500000) {
+      recommandations.push("🚀 CA élevé : excellente performance commerciale");
+    }
+
+    if (joursAnnuels < 150) {
+      recommandations.push("⏱️ Peu de jours travaillés : optimisation du temps possible");
+    } else if (joursAnnuels > 250) {
+      recommandations.push("🔥 Beaucoup de jours travaillés : attention au burn-out");
+    }
+
+    return recommandations;
+  };
+
+  const formatEuros = (amount) => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  return (
+    <div className="p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Simulation Business</h1>
+        <p className="text-gray-600">Analysez l'impact des variables sur votre activité : CA, jours travaillés et prix de vente</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Contrôles de simulation */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* CA Annuel */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Euro className="w-5 h-5 mr-2 text-green-600" />
+                CA Annuel
+                {variableLibre === "ca" && <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Calculé</span>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-green-600 mb-2">
+                  {formatEuros(caAnnuel)}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {formatEuros(caMensuel)}/mois • {formatEuros(caHebdomadaire)}/semaine
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Ajuster le CA annuel</Label>
+                <Slider
+                  value={[caAnnuel]}
+                  onValueChange={(value) => handleCAChange(value[0])}
+                  min={20000}
+                  max={1000000}
+                  step={5000}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>20k€</span>
+                  <span>1M€</span>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="ca-input">Saisie manuelle</Label>
+                <Input
+                  id="ca-input"
+                  type="number"
+                  value={caAnnuel}
+                  onChange={(e) => handleCAChange(parseInt(e.target.value) || 0)}
+                  min={20000}
+                  max={1000000}
+                  step={1000}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Jours travaillés */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+                Jours travaillés
+                {variableLibre === "jours" && <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Calculé</span>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-2">
+                  {joursAnnuels} jours
+                </div>
+                <div className="text-sm text-gray-600">
+                  {joursSemaine} jours/semaine • {joursParMois} jours/mois
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Ajuster les jours annuels</Label>
+                <Slider
+                  value={[joursAnnuels]}
+                  onValueChange={(value) => handleJoursChange(value[0])}
+                  min={100}
+                  max={300}
+                  step={5}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>100j</span>
+                  <span>300j</span>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="jours-input">Saisie manuelle</Label>
+                <Input
+                  id="jours-input"
+                  type="number"
+                  value={joursAnnuels}
+                  onChange={(e) => handleJoursChange(parseInt(e.target.value) || 0)}
+                  min={100}
+                  max={300}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Prix de vente */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Target className="w-5 h-5 mr-2 text-purple-600" />
+                Prix journalier
+                {variableLibre === "prix" && <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Calculé</span>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-600 mb-2">
+                  {formatEuros(prixVente)}
+                </div>
+                <div className="text-sm text-gray-600">
+                  par jour travaillé
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Ajuster le prix journalier</Label>
+                <Slider
+                  value={[prixVente]}
+                  onValueChange={(value) => handlePrixChange(value[0])}
+                  min={200}
+                  max={3000}
+                  step={25}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>200€</span>
+                  <span>3000€</span>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="prix-input">Saisie manuelle</Label>
+                <Input
+                  id="prix-input"
+                  type="number"
+                  value={prixVente}
+                  onChange={(e) => handlePrixChange(parseInt(e.target.value) || 0)}
+                  min={200}
+                  max={3000}
+                  step={25}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Résultats et analyses */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Métriques principales */}
+          <Card>
+            <CardHeader>
+              <CardTitle>📊 Résumé de votre simulation</CardTitle>
+              <CardDescription>
+                Équation : {formatEuros(caAnnuel)} = {joursAnnuels} jours × {formatEuros(prixVente)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-700">{formatEuros(caAnnuel)}</div>
+                  <div className="text-sm text-gray-600">CA Annuel</div>
+                </div>
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-700">{joursAnnuels}</div>
+                  <div className="text-sm text-gray-600">Jours/an</div>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-700">{formatEuros(prixVente)}</div>
+                  <div className="text-sm text-gray-600">Prix/jour</div>
+                </div>
+                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-700">{joursSemaine}</div>
+                  <div className="text-sm text-gray-600">Jours/semaine</div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-lg font-semibold">{formatEuros(caMensuel)}</div>
+                  <div className="text-sm text-gray-600">CA mensuel moyen</div>
+                </div>
+                <div>
+                  <div className="text-lg font-semibold">{formatEuros(caHebdomadaire)}</div>
+                  <div className="text-sm text-gray-600">CA hebdomadaire moyen</div>
+                </div>
+                <div>
+                  <div className="text-lg font-semibold">{joursParMois}</div>
+                  <div className="text-sm text-gray-600">Jours par mois</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Comparaison de scenarios */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="w-5 h-5 mr-2" />
+                Comparaison de scénarios
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80 mb-6">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={scenariosData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis tickFormatter={(value) => `${value/1000}k€`} />
+                    <Tooltip 
+                      formatter={(value, name) => {
+                        if (name === 'ca') return [formatEuros(value), 'CA annuel'];
+                        if (name === 'prix') return [formatEuros(value), 'Prix journalier'];
+                        if (name === 'jours') return [value, 'Jours travaillés'];
+                        return [value, name];
+                      }}
+                    />
+                    <Bar dataKey="ca" name="ca" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Scénario</TableHead>
+                    <TableHead>CA annuel</TableHead>
+                    <TableHead>Jours/an</TableHead>
+                    <TableHead>Prix/jour</TableHead>
+                    <TableHead>Jours/semaine</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scenariosData.map((scenario, index) => (
+                    <TableRow key={index} className={index === 0 ? "bg-blue-50" : ""}>
+                      <TableCell className={index === 0 ? "font-bold text-blue-700" : "font-medium"}>
+                        {scenario.name}
+                        {index === 0 && " 🎯"}
+                      </TableCell>
+                      <TableCell>{formatEuros(scenario.ca)}</TableCell>
+                      <TableCell>{Math.round(scenario.jours)}</TableCell>
+                      <TableCell>{formatEuros(scenario.prix)}</TableCell>
+                      <TableCell>{scenario.joursSemaine.toFixed(1)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Recommandations */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-blue-700">💡 Analyse et recommandations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {getRecommandations().map((rec, index) => (
+                  <div key={index} className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                    {rec}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">💼 Équilibres à considérer :</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <strong>Volume vs Prix :</strong>
+                    <p className="text-gray-600">Augmenter les jours ou le prix journalier ?</p>
+                  </div>
+                  <div>
+                    <strong>Qualité de vie :</strong>
+                    <p className="text-gray-600">Équilibre entre revenus et temps libre</p>
+                  </div>
+                  <div>
+                    <strong>Positionnement marché :</strong>
+                    <p className="text-gray-600">Prix cohérent avec votre expertise</p>
+                  </div>
+                  <div>
+                    <strong>Capacité de production :</strong>
+                    <p className="text-gray-600">Limite physique du nombre de jours</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
   return (
     <div className="App">
       <BrowserRouter>
