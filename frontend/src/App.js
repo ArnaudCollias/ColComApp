@@ -1553,6 +1553,7 @@ const Devis = () => {
     try {
       const data = {
         ...formData,
+        affaire_id: formData.affaire_id === "none" ? "" : formData.affaire_id,
         taux_tva: parseFloat(formData.taux_tva),
         date_validite: formData.date_validite ? new Date(formData.date_validite).toISOString() : null
       };
