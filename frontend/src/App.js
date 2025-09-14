@@ -1595,7 +1595,7 @@ const Devis = () => {
     setEditingDevis(devis);
     setFormData({
       client_id: devis.client_id,
-      affaire_id: devis.affaire_id || "",
+      affaire_id: devis.affaire_id || "none",
       titre: devis.titre,
       lignes: [...devis.lignes],
       taux_tva: devis.taux_tva,
