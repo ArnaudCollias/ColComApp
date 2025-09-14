@@ -623,6 +623,145 @@ class CRMAPITester:
         
         return success and success1 and success2 and success3 and success_error
 
+    def test_simulation_salaire_net(self):
+        """Test new salary net simulation endpoint"""
+        print("\n" + "="*50)
+        print("TESTING SIMULATION SALAIRE NET (NEW FEATURE)")
+        print("="*50)
+        
+        # Test scenario 1: 30k€ net souhaité, célibataire
+        scenario1_data = {
+            "salaire_net_souhaite": 30000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0
+        }
+        
+        success1, result1 = self.run_test(
+            "Simulation Salaire Net - 30k€ célibataire",
+            "POST",
+            "simulation-salaire-net",
+            200,
+            data=scenario1_data
+        )
+        
+        if success1:
+            print(f"   ✅ Simulation 30k€ calculée avec succès")
+            print(f"   💰 Salaire net souhaité: {result1.get('salaire_net_souhaite', 0):,.0f}€")
+            print(f"   💼 Salaire brut nécessaire: {result1.get('salaire_brut_necessaire', 0):,.0f}€")
+            print(f"   📊 Cotisations sociales: {result1.get('cotisations_sociales', 0):,.0f}€")
+            print(f"   🏛️ IR sur salaire: {result1.get('ir_sur_salaire', 0):,.0f}€")
+            print(f"   🏢 Coût total entreprise: {result1.get('cout_total_entreprise', 0):,.0f}€")
+            print(f"   📈 Taux charges sociales: {result1.get('taux_charges_sociales', 0):.1f}%")
+            print(f"   📈 Taux prélèvement total: {result1.get('taux_prelevement_total', 0):.1f}%")
+            
+            # Verify calculation consistency
+            salaire_brut = result1.get('salaire_brut_necessaire', 0)
+            cotisations = result1.get('cotisations_sociales', 0)
+            ir = result1.get('ir_sur_salaire', 0)
+            net_reel = result1.get('salaire_net_reel', 0)
+            
+            calculated_net = salaire_brut - cotisations - ir
+            if abs(calculated_net - net_reel) < 100:  # Allow 100€ tolerance
+                print("   ✅ Calculation consistency check passed")
+            else:
+                print(f"   ❌ Calculation inconsistent: {calculated_net} vs {net_reel}")
+        
+        # Test scenario 2: 50k€ net souhaité, marié 2 parts
+        scenario2_data = {
+            "salaire_net_souhaite": 50000,
+            "situation_familiale": "marie",
+            "nombre_parts": 2.0,
+            "autres_revenus": 5000
+        }
+        
+        success2, result2 = self.run_test(
+            "Simulation Salaire Net - 50k€ marié",
+            "POST",
+            "simulation-salaire-net",
+            200,
+            data=scenario2_data
+        )
+        
+        if success2:
+            print(f"   ✅ Simulation 50k€ marié calculée avec succès")
+            print(f"   💼 Salaire brut nécessaire: {result2.get('salaire_brut_necessaire', 0):,.0f}€")
+            print(f"   🏢 Coût total entreprise: {result2.get('cout_total_entreprise', 0):,.0f}€")
+            print(f"   📈 Taux prélèvement total: {result2.get('taux_prelevement_total', 0):.1f}%")
+        
+        # Test scenario 3: 80k€ net souhaité (high salary)
+        scenario3_data = {
+            "salaire_net_souhaite": 80000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0
+        }
+        
+        success3, result3 = self.run_test(
+            "Simulation Salaire Net - 80k€ célibataire",
+            "POST",
+            "simulation-salaire-net",
+            200,
+            data=scenario3_data
+        )
+        
+        if success3:
+            print(f"   ✅ Simulation 80k€ calculée avec succès")
+            print(f"   💼 Salaire brut nécessaire: {result3.get('salaire_brut_necessaire', 0):,.0f}€")
+            print(f"   🏢 Coût total entreprise: {result3.get('cout_total_entreprise', 0):,.0f}€")
+            print(f"   📈 Taux prélèvement total: {result3.get('taux_prelevement_total', 0):.1f}%")
+        
+        # Test error handling - negative salary
+        error_data = {
+            "salaire_net_souhaite": -10000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0
+        }
+        
+        success_error, _ = self.run_test(
+            "Simulation Error - Negative Salary",
+            "POST",
+            "simulation-salaire-net",
+            400,  # Should return error
+            data=error_data
+        )
+        
+        if success_error:
+            print("   ✅ Error handling for negative salary works correctly")
+        
+        # Test edge case - very low salary
+        low_salary_data = {
+            "salaire_net_souhaite": 15000,
+            "situation_familiale": "celibataire",
+            "nombre_parts": 1.0,
+            "autres_revenus": 0
+        }
+        
+        success_low, result_low = self.run_test(
+            "Simulation Salaire Net - 15k€ (low salary)",
+            "POST",
+            "simulation-salaire-net",
+            200,
+            data=low_salary_data
+        )
+        
+        if success_low:
+            print(f"   ✅ Low salary simulation works")
+            print(f"   💼 Salaire brut nécessaire: {result_low.get('salaire_brut_necessaire', 0):,.0f}€")
+        
+        # Verify recommendations are provided
+        if success1 and result1:
+            recommendations = result1.get('recommandations', [])
+            if len(recommendations) > 0:
+                print(f"   ✅ Recommendations provided: {len(recommendations)} items")
+                for i, rec in enumerate(recommendations[:2]):  # Show first 2
+                    print(f"   💡 {rec}")
+            else:
+                print("   ❌ No recommendations provided")
+        
+        return success1 and success2 and success3 and success_error and success_low
+
     def cleanup(self):
         """Clean up created test data"""
         print("\n" + "="*50)
