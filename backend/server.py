@@ -507,6 +507,7 @@ class OptimisationRequest(BaseModel):
     nombre_parts: float = 1.0
     autres_revenus: float = 0.0
     patrimoine_existant: float = 0.0
+    remuneration_nette_souhaitee: Optional[float] = None
 
 class ScenarioFiscal(BaseModel):
     remuneration_brute: float
