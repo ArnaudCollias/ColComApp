@@ -798,6 +798,8 @@ async def simuler_par_salaire_net(request: SimulationNetRequest):
         taux_prelevement_total=taux_prelevement_total,
         recommandations=recommandations
     )
+
+@api_router.post("/optimisation-fiscale", response_model=OptimisationResponse)
 async def optimiser_fiscalite_sasu(request: OptimisationRequest):
     """Calcule l'optimisation fiscale pour une SASU"""
     
