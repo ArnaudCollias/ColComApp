@@ -112,9 +112,14 @@ const CalendarDashboard = () => {
   const [viewMode, setViewMode] = useState("month"); // month, week, list
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [affaires, setAffaires] = useState([]);
 
   useEffect(() => {
     fetchCalendarEvents();
+    fetchClientsAndAffaires();
   }, []);
 
   const fetchCalendarEvents = async () => {
@@ -127,24 +132,30 @@ const CalendarDashboard = () => {
 
       const actionEvents = actionsResponse.data.map(action => ({
         id: `action-${action.id}`,
+        originalId: action.id,
         title: action.titre,
         date: new Date(action.date_prevue),
         type: 'action',
         typeAction: action.type_action,
         statut: action.statut,
-        details: action.description
+        details: action.description,
+        affaire_id: action.affaire_id,
+        rawData: action
       }));
 
       const devisEvents = devisResponse.data
         .filter(devis => devis.date_validite)
         .map(devis => ({
           id: `devis-${devis.id}`,
+          originalId: devis.id,
           title: `${devis.numero} - ${devis.titre}`,
           date: new Date(devis.date_validite),
           type: 'devis',
           statut: devis.statut,
           montant: devis.montant_ttc,
-          details: `Validité jusqu'au ${new Date(devis.date_validite).toLocaleDateString('fr-FR')}`
+          details: `Validité jusqu'au ${new Date(devis.date_validite).toLocaleDateString('fr-FR')}`,
+          client_id: devis.client_id,
+          rawData: devis
         }));
 
       setEvents([...actionEvents, ...devisEvents]);
@@ -152,6 +163,50 @@ const CalendarDashboard = () => {
       toast.error("Erreur lors du chargement du calendrier");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchClientsAndAffaires = async () => {
+    try {
+      const [clientsResponse, affairesResponse] = await Promise.all([
+        axios.get(`${API}/clients`),
+        axios.get(`${API}/affaires`)
+      ]);
+      setClients(clientsResponse.data);
+      setAffaires(affairesResponse.data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des clients et affaires");
+    }
+  };
+
+  const handleEventClick = (event) => {
+    setEditingEvent(event);
+    setShowEditModal(true);
+  };
+
+  const handleSaveEvent = async (eventData) => {
+    try {
+      if (editingEvent.type === 'action') {
+        await axios.put(`${API}/actions/${editingEvent.originalId}`, {
+          affaire_id: eventData.affaire_id,
+          type_action: eventData.type_action,
+          titre: eventData.titre,
+          description: eventData.description,
+          date_prevue: new Date(eventData.date_prevue).toISOString()
+        });
+        toast.success("Action modifiée avec succès");
+      } else if (editingEvent.type === 'devis') {
+        await axios.patch(`${API}/devis/${editingEvent.originalId}/statut`, {
+          statut: eventData.statut
+        });
+        toast.success("Statut du devis modifié avec succès");
+      }
+      
+      setShowEditModal(false);
+      setEditingEvent(null);
+      fetchCalendarEvents(); // Recharger le calendrier
+    } catch (error) {
+      toast.error("Erreur lors de la modification");
     }
   };
 
@@ -219,21 +274,21 @@ const CalendarDashboard = () => {
   const getEventColor = (event) => {
     if (event.type === 'action') {
       const colors = {
-        a_faire: "bg-blue-100 text-blue-800",
-        en_cours: "bg-yellow-100 text-yellow-800",
-        termine: "bg-green-100 text-green-800",
-        annule: "bg-red-100 text-red-800"
+        a_faire: "bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer",
+        en_cours: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200 cursor-pointer",
+        termine: "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer",
+        annule: "bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer"
       };
-      return colors[event.statut] || "bg-gray-100 text-gray-800";
+      return colors[event.statut] || "bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer";
     } else {
       const colors = {
-        brouillon: "bg-gray-100 text-gray-800",
-        envoye: "bg-blue-100 text-blue-800",
-        accepte: "bg-green-100 text-green-800",
-        refuse: "bg-red-100 text-red-800",
-        expire: "bg-orange-100 text-orange-800"
+        brouillon: "bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer",
+        envoye: "bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer",
+        accepte: "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer",
+        refuse: "bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer",
+        expire: "bg-orange-100 text-orange-800 hover:bg-orange-200 cursor-pointer"
       };
-      return colors[event.statut] || "bg-gray-100 text-gray-800";
+      return colors[event.statut] || "bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer";
     }
   };
 
@@ -283,11 +338,13 @@ const CalendarDashboard = () => {
                   {dayEvents.slice(0, 2).map(event => (
                     <div
                       key={event.id}
-                      className={`text-xs p-1 rounded flex items-center ${getEventColor(event)}`}
-                      title={event.details}
+                      className={`text-xs p-1 rounded flex items-center transition-colors ${getEventColor(event)}`}
+                      title={`${event.details} - Cliquer pour éditer`}
+                      onClick={() => handleEventClick(event)}
                     >
                       {getEventTypeIcon(event)}
                       <span className="ml-1 truncate">{event.title}</span>
+                      <Edit className="w-2 h-2 ml-auto opacity-0 group-hover:opacity-100" />
                     </div>
                   ))}
                   {dayEvents.length > 2 && (
@@ -336,16 +393,18 @@ const CalendarDashboard = () => {
                   {dayEvents.map(event => (
                     <div
                       key={event.id}
-                      className={`text-xs p-2 rounded flex items-center ${getEventColor(event)}`}
-                      title={event.details}
+                      className={`text-xs p-2 rounded flex items-center transition-colors ${getEventColor(event)}`}
+                      title={`${event.details} - Cliquer pour éditer`}
+                      onClick={() => handleEventClick(event)}
                     >
                       {getEventTypeIcon(event)}
-                      <div className="ml-1">
+                      <div className="ml-1 flex-1">
                         <div className="font-medium truncate">{event.title}</div>
                         {event.type === 'devis' && (
                           <div className="text-xs">{event.montant?.toFixed(2)} €</div>
                         )}
                       </div>
+                      <Edit className="w-3 h-3 opacity-70" />
                     </div>
                   ))}
                 </div>
@@ -369,7 +428,12 @@ const CalendarDashboard = () => {
         <h3 className="text-lg font-semibold mb-4">Événements à venir (30 prochains jours)</h3>
         <div className="space-y-2">
           {upcomingEvents.map(event => (
-            <div key={event.id} className={`p-3 rounded border flex items-center justify-between ${getEventColor(event)}`}>
+            <div 
+              key={event.id} 
+              className={`p-3 rounded border flex items-center justify-between transition-colors ${getEventColor(event)}`}
+              onClick={() => handleEventClick(event)}
+              title="Cliquer pour éditer"
+            >
               <div className="flex items-center">
                 {getEventTypeIcon(event)}
                 <div className="ml-3">
@@ -377,12 +441,15 @@ const CalendarDashboard = () => {
                   <div className="text-sm">{event.details}</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="font-medium">{event.date.toLocaleDateString('fr-FR')}</div>
-                <div className="text-sm">{event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
-                {event.type === 'devis' && (
-                  <div className="text-sm font-medium">{event.montant?.toFixed(2)} €</div>
-                )}
+              <div className="text-right flex items-center">
+                <div>
+                  <div className="font-medium">{event.date.toLocaleDateString('fr-FR')}</div>
+                  <div className="text-sm">{event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+                  {event.type === 'devis' && (
+                    <div className="text-sm font-medium">{event.montant?.toFixed(2)} €</div>
+                  )}
+                </div>
+                <Edit className="w-4 h-4 ml-3 opacity-70" />
               </div>
             </div>
           ))}
@@ -410,45 +477,60 @@ const CalendarDashboard = () => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Calendrier commercial</CardTitle>
-          <div className="flex space-x-2">
-            <Button
-              variant={viewMode === "month" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("month")}
-            >
-              Mois
-            </Button>
-            <Button
-              variant={viewMode === "week" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("week")}
-            >
-              Semaine
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-            >
-              <List className="w-4 h-4 mr-1" />
-              Liste
-            </Button>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Calendrier commercial</CardTitle>
+            <div className="flex space-x-2">
+              <Button
+                variant={viewMode === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("month")}
+              >
+                Mois
+              </Button>
+              <Button
+                variant={viewMode === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("week")}
+              >
+                Semaine
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="w-4 h-4 mr-1" />
+                Liste
+              </Button>
+            </div>
           </div>
-        </div>
-        <CardDescription>
-          Actions planifiées et dates de validité des devis
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {viewMode === "month" && renderMonthView()}
-        {viewMode === "week" && renderWeekView()}
-        {viewMode === "list" && renderListView()}
-      </CardContent>
-    </Card>
+          <CardDescription>
+            Actions planifiées et dates de validité des devis - Cliquez sur un élément pour l'éditer
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {viewMode === "month" && renderMonthView()}
+          {viewMode === "week" && renderWeekView()}
+          {viewMode === "list" && renderListView()}
+        </CardContent>
+      </Card>
+
+      {/* Modal d'édition */}
+      <EditEventModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingEvent(null);
+        }}
+        event={editingEvent}
+        onSave={handleSaveEvent}
+        clients={clients}
+        affaires={affaires}
+      />
+    </>
   );
 };
 // Dashboard
