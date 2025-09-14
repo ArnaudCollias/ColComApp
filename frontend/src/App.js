@@ -2597,11 +2597,13 @@ const Devis = () => {
   );
 };
 
-// Optimisation Fiscale SASU (code existant maintenu)
+// Optimisation Fiscale SASU
 const OptimisationFiscale = () => {
   const [simulation, setSimulation] = useState(null);
+  const [simulationNet, setSimulationNet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [baremes, setBaremes] = useState(null);
+  const [modeSimulation, setModeSimulation] = useState("optimisation"); // "optimisation" ou "salaire_net"
   const [formData, setFormData] = useState({
     ca_previsionnel: 150000,
     charges_deductibles: 30000,
@@ -2609,6 +2611,12 @@ const OptimisationFiscale = () => {
     nombre_parts: 1.0,
     autres_revenus: 0,
     patrimoine_existant: 0
+  });
+  const [formDataNet, setFormDataNet] = useState({
+    salaire_net_souhaite: 40000,
+    situation_familiale: "celibataire",
+    nombre_parts: 1.0,
+    autres_revenus: 0
   });
 
   useEffect(() => {
@@ -2627,9 +2635,17 @@ const OptimisationFiscale = () => {
   const runSimulation = async () => {
     setLoading(true);
     try {
-      const response = await axios.post(`${API}/optimisation-fiscale`, formData);
-      setSimulation(response.data);
-      toast.success("Simulation calculée avec succès");
+      if (modeSimulation === "optimisation") {
+        const response = await axios.post(`${API}/optimisation-fiscale`, formData);
+        setSimulation(response.data);
+        setSimulationNet(null);
+        toast.success("Simulation d'optimisation calculée avec succès");
+      } else {
+        const response = await axios.post(`${API}/simulation-salaire-net`, formDataNet);
+        setSimulationNet(response.data);
+        setSimulation(null);
+        toast.success("Simulation par salaire net calculée avec succès");
+      }
     } catch (error) {
       toast.error("Erreur lors du calcul de la simulation");
     } finally {
@@ -2650,7 +2666,7 @@ const OptimisationFiscale = () => {
     return `${rate.toFixed(1)}%`;
   };
 
-  // Données pour les graphiques
+  // Données pour les graphiques (mode optimisation)
   const chartData = simulation ? [
     {
       name: 'Scénario Optimal',
@@ -2682,11 +2698,57 @@ const OptimisationFiscale = () => {
     { name: 'IR', value: simulation.scenario_optimal.ir_sur_remuneration + simulation.scenario_optimal.ir_sur_dividendes, color: '#8b5cf6' }
   ] : [];
 
+  // Données pour le graphique salaire net
+  const pieDataNet = simulationNet ? [
+    { name: 'Salaire net', value: simulationNet.salaire_net_reel, color: '#10b981' },
+    { name: 'Cotisations sociales', value: simulationNet.cotisations_sociales, color: '#ef4444' },
+    { name: 'IR sur salaire', value: simulationNet.ir_sur_salaire, color: '#8b5cf6' },
+    { name: 'Charges patronales', value: simulationNet.charges_patronales_estimees, color: '#f59e0b' }
+  ] : [];
+
   return (
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Optimisation Fiscale SASU</h1>
-        <p className="text-gray-600">Calculez la répartition optimale rémunération/dividendes avec les barèmes 2025</p>
+        <p className="text-gray-600">Calculez la répartition optimale ou simulez un objectif de salaire net</p>
+      </div>
+
+      {/* Sélecteur de mode */}
+      <div className="mb-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Mode de simulation</CardTitle>
+            <CardDescription>Choisissez le type de simulation souhaité</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex space-x-4">
+              <Button
+                variant={modeSimulation === "optimisation" ? "default" : "outline"}
+                onClick={() => {
+                  setModeSimulation("optimisation");
+                  setSimulation(null);
+                  setSimulationNet(null);
+                }}
+                className="flex-1"
+              >
+                <Calculator className="w-4 h-4 mr-2" />
+                Optimisation rémunération/dividendes
+              </Button>
+              <Button
+                variant={modeSimulation === "salaire_net" ? "default" : "outline"}
+                onClick={() => {
+                  setModeSimulation("salaire_net");
+                  setSimulation(null);
+                  setSimulationNet(null);
+                }}
+                className="flex-1"
+              >
+                <Euro className="w-4 h-4 mr-2" />
+                Simulation par salaire net
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2696,81 +2758,147 @@ const OptimisationFiscale = () => {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Calculator className="w-5 h-5 mr-2" />
-                Paramètres de simulation
+                {modeSimulation === "optimisation" ? "Paramètres d'optimisation" : "Objectif de salaire net"}
               </CardTitle>
               <CardDescription>
-                Saisissez vos données prévisionnelles
+                {modeSimulation === "optimisation" 
+                  ? "Saisissez vos données prévisionnelles"
+                  : "Définissez votre objectif de salaire net annuel"
+                }
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="ca">Chiffre d'affaires prévisionnel</Label>
-                <Input
-                  id="ca"
-                  type="number"
-                  value={formData.ca_previsionnel}
-                  onChange={(e) => setFormData({...formData, ca_previsionnel: parseFloat(e.target.value) || 0})}
-                  placeholder="150000"
-                />
-              </div>
+              {modeSimulation === "optimisation" ? (
+                // Formulaire optimisation classique
+                <>
+                  <div>
+                    <Label htmlFor="ca">Chiffre d'affaires prévisionnel</Label>
+                    <Input
+                      id="ca"
+                      type="number"
+                      value={formData.ca_previsionnel}
+                      onChange={(e) => setFormData({...formData, ca_previsionnel: parseFloat(e.target.value) || 0})}
+                      placeholder="150000"
+                    />
+                  </div>
 
-              <div>
-                <Label htmlFor="charges">Charges déductibles</Label>
-                <Input
-                  id="charges"
-                  type="number"
-                  value={formData.charges_deductibles}
-                  onChange={(e) => setFormData({...formData, charges_deductibles: parseFloat(e.target.value) || 0})}
-                  placeholder="30000"
-                />
-              </div>
+                  <div>
+                    <Label htmlFor="charges">Charges déductibles</Label>
+                    <Input
+                      id="charges"
+                      type="number"
+                      value={formData.charges_deductibles}
+                      onChange={(e) => setFormData({...formData, charges_deductibles: parseFloat(e.target.value) || 0})}
+                      placeholder="30000"
+                    />
+                  </div>
 
-              <div>
-                <Label htmlFor="situation">Situation familiale</Label>
-                <Select 
-                  value={formData.situation_familiale} 
-                  onValueChange={(value) => setFormData({...formData, situation_familiale: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="celibataire">Célibataire</SelectItem>
-                    <SelectItem value="marie">Marié(e)</SelectItem>
-                    <SelectItem value="pacs">Pacsé(e)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div>
+                    <Label htmlFor="situation">Situation familiale</Label>
+                    <Select 
+                      value={formData.situation_familiale} 
+                      onValueChange={(value) => setFormData({...formData, situation_familiale: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="celibataire">Célibataire</SelectItem>
+                        <SelectItem value="marie">Marié(e)</SelectItem>
+                        <SelectItem value="pacs">Pacsé(e)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div>
-                <Label htmlFor="parts">Nombre de parts fiscales</Label>
-                <Input
-                  id="parts"
-                  type="number"
-                  step="0.5"
-                  value={formData.nombre_parts}
-                  onChange={(e) => setFormData({...formData, nombre_parts: parseFloat(e.target.value) || 1})}
-                  placeholder="1.0"
-                />
-              </div>
+                  <div>
+                    <Label htmlFor="parts">Nombre de parts fiscales</Label>
+                    <Input
+                      id="parts"
+                      type="number"
+                      step="0.5"
+                      value={formData.nombre_parts}
+                      onChange={(e) => setFormData({...formData, nombre_parts: parseFloat(e.target.value) || 1})}
+                      placeholder="1.0"
+                    />
+                  </div>
 
-              <div>
-                <Label htmlFor="autres">Autres revenus annuels</Label>
-                <Input
-                  id="autres"
-                  type="number"
-                  value={formData.autres_revenus}
-                  onChange={(e) => setFormData({...formData, autres_revenus: parseFloat(e.target.value) || 0})}
-                  placeholder="0"
-                />
-              </div>
+                  <div>
+                    <Label htmlFor="autres">Autres revenus annuels</Label>
+                    <Input
+                      id="autres"
+                      type="number"
+                      value={formData.autres_revenus}
+                      onChange={(e) => setFormData({...formData, autres_revenus: parseFloat(e.target.value) || 0})}
+                      placeholder="0"
+                    />
+                  </div>
+                </>
+              ) : (
+                // Formulaire simulation par salaire net
+                <>
+                  <div>
+                    <Label htmlFor="salaire_net">Salaire net annuel souhaité (€)</Label>
+                    <Input
+                      id="salaire_net"
+                      type="number"
+                      value={formDataNet.salaire_net_souhaite}
+                      onChange={(e) => setFormDataNet({...formDataNet, salaire_net_souhaite: parseFloat(e.target.value) || 0})}
+                      placeholder="40000"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Salaire net après cotisations sociales et impôt sur le revenu
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="situation_net">Situation familiale</Label>
+                    <Select 
+                      value={formDataNet.situation_familiale} 
+                      onValueChange={(value) => setFormDataNet({...formDataNet, situation_familiale: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="celibataire">Célibataire</SelectItem>
+                        <SelectItem value="marie">Marié(e)</SelectItem>
+                        <SelectItem value="pacs">Pacsé(e)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="parts_net">Nombre de parts fiscales</Label>
+                    <Input
+                      id="parts_net"
+                      type="number"
+                      step="0.5"
+                      value={formDataNet.nombre_parts}
+                      onChange={(e) => setFormDataNet({...formDataNet, nombre_parts: parseFloat(e.target.value) || 1})}
+                      placeholder="1.0"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="autres_net">Autres revenus annuels</Label>
+                    <Input
+                      id="autres_net"
+                      type="number"
+                      value={formDataNet.autres_revenus}
+                      onChange={(e) => setFormDataNet({...formDataNet, autres_revenus: parseFloat(e.target.value) || 0})}
+                      placeholder="0"
+                    />
+                  </div>
+                </>
+              )}
 
               <Button 
                 onClick={runSimulation} 
                 disabled={loading}
                 className="w-full"
               >
-                {loading ? "Calcul en cours..." : "Calculer l'optimisation"}
+                {loading ? "Calcul en cours..." : 
+                 modeSimulation === "optimisation" ? "Calculer l'optimisation" : "Simuler le salaire net"}
               </Button>
             </CardContent>
           </Card>
@@ -2798,7 +2926,8 @@ const OptimisationFiscale = () => {
 
         {/* Résultats */}
         <div className="lg:col-span-2">
-          {simulation ? (
+          {/* Résultats optimisation classique */}
+          {simulation && modeSimulation === "optimisation" && (
             <div className="space-y-6">
               {/* Scénario optimal */}
               <Card>
@@ -2940,7 +3069,138 @@ const OptimisationFiscale = () => {
                 </CardContent>
               </Card>
             </div>
-          ) : (
+          )}
+
+          {/* Résultats simulation par salaire net */}
+          {simulationNet && modeSimulation === "salaire_net" && (
+            <div className="space-y-6">
+              {/* Résultats du salaire net */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-green-700">💰 Simulation par salaire net</CardTitle>
+                  <CardDescription>
+                    Calculs nécessaires pour obtenir {formatEuros(simulationNet.salaire_net_souhaite)} net annuel
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {formatEuros(simulationNet.salaire_brut_necessaire)}
+                      </div>
+                      <div className="text-sm text-gray-600">Salaire brut nécessaire</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-600">
+                        {formatEuros(simulationNet.cotisations_sociales)}
+                      </div>
+                      <div className="text-sm text-gray-600">Cotisations sociales</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {formatEuros(simulationNet.ir_sur_salaire)}
+                      </div>
+                      <div className="text-sm text-gray-600">IR sur salaire</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {formatEuros(simulationNet.cout_total_entreprise)}
+                      </div>
+                      <div className="text-sm text-gray-600">Coût total entreprise</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-lg font-bold text-gray-700">
+                        {formatPercent(simulationNet.taux_charges_sociales)}
+                      </div>
+                      <div className="text-sm text-gray-600">Taux cotisations sociales</div>
+                    </div>
+                    <div className="text-center p-4 bg-gray-50 rounded-lg">
+                      <div className="text-lg font-bold text-gray-700">
+                        {formatPercent(simulationNet.taux_prelevement_total)}
+                      </div>
+                      <div className="text-sm text-gray-600">Taux prélèvement total</div>
+                    </div>
+                  </div>
+
+                  {/* Répartition des coûts - Graphique en secteurs */}
+                  <div className="mb-6">
+                    <h4 className="text-lg font-semibold mb-4">Répartition des coûts</h4>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={pieDataNet}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={100}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {pieDataNet.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value) => formatEuros(value)} />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Détail des calculs */}
+                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold">Détail des calculs :</h4>
+                    <div className="flex justify-between">
+                      <span>Salaire brut :</span>
+                      <span className="font-medium">{formatEuros(simulationNet.salaire_brut_necessaire)}</span>
+                    </div>
+                    <div className="flex justify-between text-red-600">
+                      <span>- Cotisations sociales ({formatPercent(simulationNet.taux_charges_sociales)}) :</span>
+                      <span className="font-medium">-{formatEuros(simulationNet.cotisations_sociales)}</span>
+                    </div>
+                    <div className="flex justify-between text-purple-600">
+                      <span>- Impôt sur le revenu :</span>
+                      <span className="font-medium">-{formatEuros(simulationNet.ir_sur_salaire)}</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between font-bold text-green-600">
+                      <span>= Salaire net réel :</span>
+                      <span>{formatEuros(simulationNet.salaire_net_reel)}</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between text-orange-600">
+                      <span>+ Charges patronales (≈42%) :</span>
+                      <span className="font-medium">{formatEuros(simulationNet.charges_patronales_estimees)}</span>
+                    </div>
+                    <div className="border-t pt-2 flex justify-between font-bold text-gray-900">
+                      <span>= Coût total entreprise :</span>
+                      <span>{formatEuros(simulationNet.cout_total_entreprise)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Recommandations pour salaire net */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-blue-700">💡 Analyse et recommandations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {simulationNet.recommandations.map((rec, index) => (
+                      <div key={index} className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
+                        {rec}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* État vide */}
+          {!simulation && !simulationNet && (
             <Card>
               <CardContent className="text-center py-12">
                 <Calculator className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -2948,7 +3208,10 @@ const OptimisationFiscale = () => {
                   Aucune simulation disponible
                 </h3>
                 <p className="text-gray-600">
-                  Saisissez vos paramètres et lancez une simulation pour voir les résultats d'optimisation fiscale.
+                  {modeSimulation === "optimisation" 
+                    ? "Saisissez vos paramètres et lancez une simulation pour voir les résultats d'optimisation fiscale."
+                    : "Définissez votre objectif de salaire net et lancez la simulation pour voir les impacts."
+                  }
                 </p>
               </CardContent>
             </Card>
