@@ -1469,7 +1469,7 @@ const Devis = () => {
   const [filters, setFilters] = useState({});
   const [formData, setFormData] = useState({
     client_id: "",
-    affaire_id: "",
+    affaire_id: "none",
     titre: "",
     lignes: [],
     taux_tva: 20.0,
