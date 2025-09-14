@@ -2212,6 +2212,24 @@ const Devis = () => {
                       >
                         <Edit className="w-3 h-3" />
                       </Button>
+                      
+                      {/* Menu de changement de statut */}
+                      <Select
+                        value={devis.statut}
+                        onValueChange={(newStatut) => changeDevisStatut(devis.id, newStatut)}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="brouillon">Brouillon</SelectItem>
+                          <SelectItem value="envoye">Envoyé</SelectItem>
+                          <SelectItem value="accepte">Accepté</SelectItem>
+                          <SelectItem value="refuse">Refusé</SelectItem>
+                          <SelectItem value="expire">Expiré</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button size="sm" variant="destructive">
