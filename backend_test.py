@@ -1022,6 +1022,7 @@ class CRMAPITester:
         print(f"✅ Error Handling: {'PASS' if errors_ok else 'FAIL'}")
         print(f"✅ Optimisation Fiscale: {'PASS' if fiscal_ok else 'FAIL'}")
         print(f"✅ Simulation Salaire Net (NEW): {'PASS' if salary_net_ok else 'FAIL'}")
+        print(f"✅ Optimisation avec Contrainte Rémunération (NEWEST): {'PASS' if fiscal_contrainte_ok else 'FAIL'}")
         
         return self.tests_passed == self.tests_run
 
