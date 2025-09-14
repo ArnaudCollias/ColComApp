@@ -104,8 +104,351 @@ const SearchAndFilter = ({ searchTerm, setSearchTerm, filters, setFilters, filte
   );
 };
 
-// Dashboard
-const Dashboard = () => {
+// Composant Calendrier pour le Dashboard
+const CalendarDashboard = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState("month"); // month, week, list
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCalendarEvents();
+  }, []);
+
+  const fetchCalendarEvents = async () => {
+    try {
+      // Récupérer les actions et devis avec leurs dates
+      const [actionsResponse, devisResponse] = await Promise.all([
+        axios.get(`${API}/actions`),
+        axios.get(`${API}/devis`)
+      ]);
+
+      const actionEvents = actionsResponse.data.map(action => ({
+        id: `action-${action.id}`,
+        title: action.titre,
+        date: new Date(action.date_prevue),
+        type: 'action',
+        typeAction: action.type_action,
+        statut: action.statut,
+        details: action.description
+      }));
+
+      const devisEvents = devisResponse.data
+        .filter(devis => devis.date_validite)
+        .map(devis => ({
+          id: `devis-${devis.id}`,
+          title: `${devis.numero} - ${devis.titre}`,
+          date: new Date(devis.date_validite),
+          type: 'devis',
+          statut: devis.statut,
+          montant: devis.montant_ttc,
+          details: `Validité jusqu'au ${new Date(devis.date_validite).toLocaleDateString('fr-FR')}`
+        }));
+
+      setEvents([...actionEvents, ...devisEvents]);
+    } catch (error) {
+      toast.error("Erreur lors du chargement du calendrier");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+
+    const days = [];
+    for (let i = 0; i < 42; i++) {
+      const day = new Date(startDate);
+      day.setDate(startDate.getDate() + i);
+      days.push(day);
+    }
+    return days;
+  };
+
+  const getWeekDays = (date) => {
+    const startOfWeek = new Date(date);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day;
+    startOfWeek.setDate(diff);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + i);
+      days.push(day);
+    }
+    return days;
+  };
+
+  const getEventsForDate = (date) => {
+    return events.filter(event => {
+      const eventDate = new Date(event.date);
+      return eventDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(currentDate.getMonth() + direction);
+    setCurrentDate(newDate);
+  };
+
+  const navigateWeek = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + (direction * 7));
+    setCurrentDate(newDate);
+  };
+
+  const getEventTypeIcon = (event) => {
+    if (event.type === 'action') {
+      const icons = { appel: Phone, email: Mail, rendez_vous: Calendar, relance: AlertCircle, autre: Target };
+      const Icon = icons[event.typeAction] || Target;
+      return <Icon className="w-3 h-3" />;
+    }
+    return <FileText className="w-3 h-3" />;
+  };
+
+  const getEventColor = (event) => {
+    if (event.type === 'action') {
+      const colors = {
+        a_faire: "bg-blue-100 text-blue-800",
+        en_cours: "bg-yellow-100 text-yellow-800",
+        termine: "bg-green-100 text-green-800",
+        annule: "bg-red-100 text-red-800"
+      };
+      return colors[event.statut] || "bg-gray-100 text-gray-800";
+    } else {
+      const colors = {
+        brouillon: "bg-gray-100 text-gray-800",
+        envoye: "bg-blue-100 text-blue-800",
+        accepte: "bg-green-100 text-green-800",
+        refuse: "bg-red-100 text-red-800",
+        expire: "bg-orange-100 text-orange-800"
+      };
+      return colors[event.statut] || "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const renderMonthView = () => {
+    const days = getDaysInMonth(currentDate);
+    const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+    
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <Button variant="outline" size="sm" onClick={() => navigateMonth(-1)}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <h3 className="text-lg font-semibold">
+            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+          </h3>
+          <Button variant="outline" size="sm" onClick={() => navigateMonth(1)}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"].map(day => (
+            <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day, index) => {
+            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+            const isToday = day.toDateString() === new Date().toDateString();
+            const dayEvents = getEventsForDate(day);
+            
+            return (
+              <div
+                key={index}
+                className={`min-h-[80px] p-1 border rounded ${
+                  isCurrentMonth ? "bg-white" : "bg-gray-50"
+                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+              >
+                <div className={`text-sm font-medium ${isCurrentMonth ? "text-gray-900" : "text-gray-400"}`}>
+                  {day.getDate()}
+                </div>
+                <div className="space-y-1">
+                  {dayEvents.slice(0, 2).map(event => (
+                    <div
+                      key={event.id}
+                      className={`text-xs p-1 rounded flex items-center ${getEventColor(event)}`}
+                      title={event.details}
+                    >
+                      {getEventTypeIcon(event)}
+                      <span className="ml-1 truncate">{event.title}</span>
+                    </div>
+                  ))}
+                  {dayEvents.length > 2 && (
+                    <div className="text-xs text-gray-500">+{dayEvents.length - 2} autres</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderWeekView = () => {
+    const days = getWeekDays(currentDate);
+    
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <Button variant="outline" size="sm" onClick={() => navigateWeek(-1)}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <h3 className="text-lg font-semibold">
+            Semaine du {days[0].toLocaleDateString('fr-FR')}
+          </h3>
+          <Button variant="outline" size="sm" onClick={() => navigateWeek(1)}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-2">
+          {days.map((day, index) => {
+            const isToday = day.toDateString() === new Date().toDateString();
+            const dayEvents = getEventsForDate(day);
+            
+            return (
+              <div key={index} className={`p-3 border rounded bg-white ${isToday ? "ring-2 ring-blue-500" : ""}`}>
+                <div className="text-center font-medium mb-2">
+                  <div className="text-xs text-gray-500">
+                    {day.toLocaleDateString('fr-FR', { weekday: 'short' })}
+                  </div>
+                  <div className="text-lg">{day.getDate()}</div>
+                </div>
+                <div className="space-y-1">
+                  {dayEvents.map(event => (
+                    <div
+                      key={event.id}
+                      className={`text-xs p-2 rounded flex items-center ${getEventColor(event)}`}
+                      title={event.details}
+                    >
+                      {getEventTypeIcon(event)}
+                      <div className="ml-1">
+                        <div className="font-medium truncate">{event.title}</div>
+                        {event.type === 'devis' && (
+                          <div className="text-xs">{event.montant?.toFixed(2)} €</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderListView = () => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    const upcomingEvents = events
+      .filter(event => event.date >= today && event.date <= nextMonth)
+      .sort((a, b) => a.date - b.date);
+
+    return (
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Événements à venir (30 prochains jours)</h3>
+        <div className="space-y-2">
+          {upcomingEvents.map(event => (
+            <div key={event.id} className={`p-3 rounded border flex items-center justify-between ${getEventColor(event)}`}>
+              <div className="flex items-center">
+                {getEventTypeIcon(event)}
+                <div className="ml-3">
+                  <div className="font-medium">{event.title}</div>
+                  <div className="text-sm">{event.details}</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-medium">{event.date.toLocaleDateString('fr-FR')}</div>
+                <div className="text-sm">{event.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+                {event.type === 'devis' && (
+                  <div className="text-sm font-medium">{event.montant?.toFixed(2)} €</div>
+                )}
+              </div>
+            </div>
+          ))}
+          {upcomingEvents.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              Aucun événement à venir dans les 30 prochains jours
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Calendrier commercial</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">Chargement du calendrier...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Calendrier commercial</CardTitle>
+          <div className="flex space-x-2">
+            <Button
+              variant={viewMode === "month" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("month")}
+            >
+              Mois
+            </Button>
+            <Button
+              variant={viewMode === "week" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("week")}
+            >
+              Semaine
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+            >
+              <List className="w-4 h-4 mr-1" />
+              Liste
+            </Button>
+          </div>
+        </div>
+        <CardDescription>
+          Actions planifiées et dates de validité des devis
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {viewMode === "month" && renderMonthView()}
+        {viewMode === "week" && renderWeekView()}
+        {viewMode === "list" && renderListView()}
+      </CardContent>
+    </Card>
+  );
+};
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
 
