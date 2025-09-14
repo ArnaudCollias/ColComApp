@@ -1577,7 +1577,7 @@ const Devis = () => {
   const resetForm = () => {
     setFormData({
       client_id: "",
-      affaire_id: "",
+      affaire_id: "none",
       titre: "",
       lignes: [],
       taux_tva: 20.0,
