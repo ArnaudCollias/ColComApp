@@ -545,6 +545,19 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({});
+  const [showForm, setShowForm] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
+  const [formData, setFormData] = useState({
+    nom: "",
+    prenom: "",
+    email: "",
+    telephone: "",
+    entreprise: "",
+    poste: "",
+    adresse: "",
+    siret: "",
+    notes: ""
+  });
 
   useEffect(() => {
     fetchClients();
@@ -558,6 +571,65 @@ const Clients = () => {
       toast.error("Erreur lors du chargement des clients");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingClient) {
+        await axios.put(`${API}/clients/${editingClient.id}`, formData);
+        toast.success("Client modifié avec succès");
+      } else {
+        await axios.post(`${API}/clients`, formData);
+        toast.success("Client créé avec succès");
+      }
+      setShowForm(false);
+      setEditingClient(null);
+      resetForm();
+      fetchClients();
+    } catch (error) {
+      toast.error("Erreur lors de l'opération");
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      nom: "",
+      prenom: "",
+      email: "",
+      telephone: "",
+      entreprise: "",
+      poste: "",
+      adresse: "",
+      siret: "",
+      notes: ""
+    });
+  };
+
+  const editClient = (client) => {
+    setEditingClient(client);
+    setFormData({
+      nom: client.nom,
+      prenom: client.prenom,
+      email: client.email,
+      telephone: client.telephone,
+      entreprise: client.entreprise,
+      poste: client.poste || "",
+      adresse: client.adresse || "",
+      siret: client.siret || "",
+      notes: client.notes || ""
+    });
+    setShowForm(true);
+  };
+
+  const deleteClient = async (clientId) => {
+    try {
+      await axios.delete(`${API}/clients/${clientId}`);
+      toast.success("Client supprimé");
+      fetchClients();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
     }
   };
 
@@ -581,6 +653,125 @@ const Clients = () => {
           <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
           <p className="text-gray-600">Gérez votre portefeuille client</p>
         </div>
+        <Dialog open={showForm} onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) {
+            setEditingClient(null);
+            resetForm();
+          }
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Nouveau client
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingClient ? "Modifier le client" : "Créer un nouveau client"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingClient ? "Modifiez les informations du client." : "Ajoutez les informations du client."}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="nom">Nom *</Label>
+                  <Input
+                    id="nom"
+                    value={formData.nom}
+                    onChange={(e) => setFormData({...formData, nom: e.target.value})}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prenom">Prénom *</Label>
+                  <Input
+                    id="prenom"
+                    value={formData.prenom}
+                    onChange={(e) => setFormData({...formData, prenom: e.target.value})}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="telephone">Téléphone *</Label>
+                <Input
+                  id="telephone"
+                  value={formData.telephone}
+                  onChange={(e) => setFormData({...formData, telephone: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="entreprise">Entreprise *</Label>
+                <Input
+                  id="entreprise"
+                  value={formData.entreprise}
+                  onChange={(e) => setFormData({...formData, entreprise: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="poste">Poste</Label>
+                <Input
+                  id="poste"
+                  value={formData.poste}
+                  onChange={(e) => setFormData({...formData, poste: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label htmlFor="adresse">Adresse</Label>
+                <Input
+                  id="adresse"
+                  value={formData.adresse}
+                  onChange={(e) => setFormData({...formData, adresse: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label htmlFor="siret">SIRET</Label>
+                <Input
+                  id="siret"
+                  value={formData.siret}
+                  onChange={(e) => setFormData({...formData, siret: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  rows={3}
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => {
+                  setShowForm(false);
+                  setEditingClient(null);
+                  resetForm();
+                }}>
+                  Annuler
+                </Button>
+                <Button type="submit">
+                  {editingClient ? "Modifier" : "Créer"} le client
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <SearchAndFilter
@@ -641,12 +832,41 @@ const Clients = () => {
                     {new Date(client.date_creation).toLocaleDateString('fr-FR')}
                   </TableCell>
                   <TableCell>
-                    <Link to={`/affaires?client=${client.id}`}>
-                      <Button size="sm" variant="outline">
-                        <Eye className="w-3 h-3 mr-2" />
-                        Voir affaires
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => editClient(client)}
+                      >
+                        <Edit className="w-3 h-3" />
                       </Button>
-                    </Link>
+                      <Link to={`/affaires?client=${client.id}`}>
+                        <Button size="sm" variant="outline">
+                          <Eye className="w-3 h-3" />
+                        </Button>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="destructive">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Êtes-vous sûr de vouloir supprimer ce client ? Cette action supprimera aussi toutes les affaires, actions et devis associés. Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteClient(client.id)}>
+                              Supprimer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
