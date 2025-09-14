@@ -449,6 +449,8 @@ const CalendarDashboard = () => {
     </Card>
   );
 };
+// Dashboard
+const Dashboard = () => {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -521,6 +523,9 @@ const CalendarDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Calendrier commercial */}
+      <CalendarDashboard />
     </div>
   );
 };
