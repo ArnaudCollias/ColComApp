@@ -32,6 +32,7 @@ const Navigation = () => {
     { path: "/actions", label: "Actions", icon: Calendar },
     { path: "/devis", label: "Devis", icon: FileText },
     { path: "/optimisation-fiscale", label: "Optimisation fiscale", icon: Calculator },
+    { path: "/simulation-business", label: "Simulation Business", icon: BarChart3 },
   ];
 
   return (
