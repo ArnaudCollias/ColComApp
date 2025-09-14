@@ -995,6 +995,9 @@ class CRMAPITester:
         # Test new salary net simulation (NEW FEATURE)
         salary_net_ok = self.test_simulation_salaire_net()
         
+        # Test new tax optimization with net salary constraint (NEWEST FEATURE)
+        fiscal_contrainte_ok = self.test_optimisation_fiscale_avec_contrainte()
+        
         # Clean up
         self.cleanup()
         
