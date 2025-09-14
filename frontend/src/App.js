@@ -2182,21 +2182,7 @@ const Devis = () => {
 
   const changeDevisStatut = async (devisId, newStatut) => {
     try {
-      const devis = devisList.find(d => d.id === devisId);
-      if (!devis) return;
-      
-      const updatedData = {
-        client_id: devis.client_id,
-        affaire_id: devis.affaire_id || "",
-        titre: devis.titre,
-        lignes: devis.lignes,
-        taux_tva: devis.taux_tva,
-        date_validite: devis.date_validite
-      };
-      
-      await axios.put(`${API}/devis/${devisId}`, updatedData);
-      
-      // Mise à jour du statut via un endpoint spécifique si disponible, sinon on recharge
+      await axios.patch(`${API}/devis/${devisId}/statut`, { statut: newStatut });
       toast.success(`Statut du devis changé vers "${newStatut}"`);
       fetchDevis();
     } catch (error) {
