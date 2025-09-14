@@ -800,7 +800,92 @@ async def simuler_par_salaire_net(request: SimulationNetRequest):
         recommandations=recommandations
     )
 
-@api_router.post("/optimisation-fiscale", response_model=OptimisationResponse)
+def calculer_scenario_avec_contrainte_remuneration(ca: float, charges: float, 
+                                                remuneration_nette_cible: float,
+                                                situation_familiale: SituationFamiliale, 
+                                                nombre_parts: float, autres_revenus: float) -> ScenarioFiscal:
+    """Calcule un scénario en respectant une contrainte de rémunération nette"""
+    
+    # Calcul du salaire brut nécessaire pour obtenir le net souhaité
+    calculs_salaire = calculer_salaire_brut_depuis_net(
+        remuneration_nette_cible, situation_familiale, nombre_parts, autres_revenus
+    )
+    
+    remuneration_brute = calculs_salaire['salaire_brut']
+    cotisations_sociales = calculs_salaire['cotisations_sociales']
+    ir_sur_remuneration = calculs_salaire['ir_sur_salaire']
+    
+    # Calcul du résultat après rémunération
+    resultat_avant_is = ca - charges - remuneration_brute - cotisations_sociales
+    
+    # IS
+    is_a_payer = calcul_is_2025(resultat_avant_is)
+    
+    # Dividendes disponibles
+    resultat_net = resultat_avant_is - is_a_payer
+    dividendes_bruts = max(0, resultat_net)
+    
+    # Fiscalité des dividendes
+    ir_sur_dividendes = calcul_ir_dividendes(dividendes_bruts)
+    prelevement_sociaux_dividendes = calcul_prelevements_sociaux_dividendes(dividendes_bruts)
+    
+    # Totaux
+    total_impots_et_charges = (cotisations_sociales + is_a_payer + ir_sur_remuneration + 
+                              ir_sur_dividendes + prelevement_sociaux_dividendes)
+    
+    dividendes_nets = dividendes_bruts - ir_sur_dividendes - prelevement_sociaux_dividendes
+    net_disponible = remuneration_nette_cible + dividendes_nets  # On utilise le net cible exact
+    
+    taux_global = (total_impots_et_charges / ca * 100) if ca > 0 else 0
+    
+    return ScenarioFiscal(
+        remuneration_brute=remuneration_brute,
+        dividendes_bruts=dividendes_bruts,
+        is_a_payer=is_a_payer,
+        cotisations_sociales=cotisations_sociales,
+        ir_sur_remuneration=ir_sur_remuneration,
+        ir_sur_dividendes=ir_sur_dividendes,
+        prelevement_sociaux_dividendes=prelevement_sociaux_dividendes,
+        total_impots_et_charges=total_impots_et_charges,
+        net_disponible=net_disponible,
+        taux_global_imposition=taux_global
+    )
+
+def generer_recommandations_avec_contrainte(ca: float, scenario_contraint: ScenarioFiscal, 
+                                          remuneration_nette_souhaitee: float) -> List[str]:
+    """Génère des recommandations pour un scénario avec contrainte de rémunération"""
+    recommandations = []
+    
+    recommandations.append(
+        f"🎯 Rémunération nette respectée : {remuneration_nette_souhaitee:,.0f}€ comme souhaité"
+    )
+    
+    recommandations.append(
+        f"💼 Salaire brut nécessaire : {scenario_contraint.remuneration_brute:,.0f}€ "
+        f"(charges sociales : {scenario_contraint.cotisations_sociales:,.0f}€)"
+    )
+    
+    if scenario_contraint.dividendes_bruts > 0:
+        dividendes_nets = scenario_contraint.dividendes_bruts - scenario_contraint.ir_sur_dividendes - scenario_contraint.prelevement_sociaux_dividendes
+        recommandations.append(
+            f"💰 Dividendes disponibles : {scenario_contraint.dividendes_bruts:,.0f}€ bruts "
+            f"({dividendes_nets:,.0f}€ nets après fiscalité 30%)"
+        )
+    else:
+        recommandations.append("⚠️ Aucun dividende possible avec cette contrainte de rémunération")
+    
+    if scenario_contraint.taux_global_imposition < 35:
+        recommandations.append("✅ Taux global d'imposition avantageux malgré la contrainte")
+    elif scenario_contraint.taux_global_imposition < 45:
+        recommandations.append("📊 Taux d'imposition modéré avec cette répartition imposée")
+    else:
+        recommandations.append("🔍 Taux d'imposition élevé : la contrainte limite l'optimisation")
+    
+    cout_total_remuneration = scenario_contraint.remuneration_brute + scenario_contraint.cotisations_sociales
+    if cout_total_remuneration > ca * 0.6:
+        recommandations.append("⚠️ Coût de la rémunération élevé par rapport au CA (>60%)")
+    
+    return recommandations
 async def optimiser_fiscalite_sasu(request: OptimisationRequest):
     """Calcule l'optimisation fiscale pour une SASU"""
     
